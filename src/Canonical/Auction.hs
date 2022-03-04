@@ -364,8 +364,6 @@ mkValidator auction@Auction {..} action ctx =
 
         (theBid, toReturn) = partitionBids (currentHighestBidder <> escrowBids)
 
-        -- | Read the eliOwner field and ensure
-        --
         allLowerBidsReturnedToOwners :: Bool
         allLowerBidsReturnedToOwners = all (bidIsPaid info) (M.toList (mergeBids toReturn))
         -- Ensure the amount is great than the current

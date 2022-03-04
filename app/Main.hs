@@ -3,36 +3,30 @@
 module Main where
 
 import Cardano.Api hiding (TxId)
-import Options.Applicative
+import Options.Generic
 
 import Canonical.Auction
+import Canonical.Escrow
 import Prelude
 
-data Opts = Opts
-  { output :: FilePath
-  } deriving Show
+data Options = Options
+  { batcherOutput :: FilePath
+  , escrowOutput  :: FilePath
+  } deriving (Show, Generic)
+
+instance ParseRecord Options where
+  parseRecord = parseRecordWithModifiers lispCaseModifiers
 
 main :: IO ()
-main = createSC =<< execParser opts
+main = run =<< getRecord "Auction compiler"
 
-opts :: ParserInfo Opts
-opts = info (optsParser <**> helper) . mconcat $
-  [ fullDesc
-  , progDesc "Create a smart contract for auctions"
-  ]
+run :: Options -> IO ()
+run Options{..} = do
 
-optsParser :: Parser Opts
-optsParser = Opts
-  <$> (strOption . mconcat $
-    [ long "output"
-    , metavar "FILE"
-    , help "Where to write the Plutus script"
-    , value "scripts/auction.plutus"
-    ])
+  writeFileTextEnvelope escrowOutput Nothing escrowScript >>= \case
+    Left err -> print $ displayError err
+    Right () -> putStrLn $ "wrote validator to file " ++ escrowOutput
 
-createSC :: Opts -> IO ()
-createSC Opts{..} = do
-  result <- writeFileTextEnvelope output Nothing script
-  case result of
-      Left err -> print $ displayError err
-      Right () -> putStrLn $ "wrote validator to file " ++ output
+  writeFileTextEnvelope batcherOutput Nothing script >>= \case
+    Left err -> print $ displayError err
+    Right () -> putStrLn $ "wrote validator to file " ++ batcherOutput
