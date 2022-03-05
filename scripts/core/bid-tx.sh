@@ -1,31 +1,25 @@
 set -eux
 
+
+
 thisDir=$(dirname "$0")
-baseDir=$thisDir/..
+baseDir=$thisDir/../
+tempDir=$baseDir/../temp
 
-buyerAddr=$1
-signingKey=$2
-value=$3
-oldDatumFile=$4
-oldDatumHash=$5
-newDatumHash=$6
-newDatumFile=$7
-bidAmount=$8
-redeemerFile=$9
-
-nftValidatorFile=$baseDir/auction.plutus
-scriptHash=$(cat $baseDir/$BLOCKCHAIN_PREFIX/auction.addr)
-
+mkdir -p $tempDir
 $baseDir/hash-plutus.sh
-bodyFile=temp/bid-tx-body.01
-outFile=temp/bid-tx.01
+$baseDir/hash-datums.sh
 
-utxoScript=$(scripts/query/sc.sh | grep $oldDatumHash | grep $value | head -n 1 | cardano-cli-balance-fixer parse-as-utxo)
-output1=$(cardano-cli-balance-fixer utxo-assets --utxo $utxoScript $BLOCKCHAIN)
-currentSlot=$(cardano-cli query tip $BLOCKCHAIN | jq .slot)
-startSlot=$currentSlot
-nextTenSlots=$(($currentSlot+150))
-changeOutput=$(cardano-cli-balance-fixer change --address $buyerAddr $BLOCKCHAIN)
+nftValidatorFile=$baseDir/escrow.plutus
+bidderAddress=$1
+signingKey=$2
+scriptDatumHash=$3
+output=$4
+scriptHash=$(cat $baseDir/$BLOCKCHAIN_PREFIX/escrow.addr)
+
+bodyFile=$tempDir/sell-tx-body.01
+outFile=$tempDir/sell-tx.01
+changeOutput=$(cardano-cli-balance-fixer change --address $bidderAddress $BLOCKCHAIN -o "$output")
 
 extraOutput=""
 if [ "$changeOutput" != "" ];then
@@ -35,36 +29,27 @@ fi
 cardano-cli transaction build \
     --alonzo-era \
     $BLOCKCHAIN \
-    $(cardano-cli-balance-fixer input --address $buyerAddr $BLOCKCHAIN ) \
-    --tx-in $utxoScript \
-    --tx-in-script-file $nftValidatorFile \
-    --tx-in-datum-file $oldDatumFile \
-    --tx-in-redeemer-file $redeemerFile \
-    --required-signer $signingKey \
-    --tx-in-collateral $(cardano-cli-balance-fixer collateral --address $buyerAddr $BLOCKCHAIN) \
-    --tx-out "$scriptHash + $output1 + $bidAmount lovelace" \
-    --tx-out-datum-hash $newDatumHash \
-    --tx-out-datum-embed-file $newDatumFile \
-    --tx-out "$buyerAddr + 3000000 lovelace $extraOutput" \
-    --change-address $buyerAddr \
+    $(cardano-cli-balance-fixer input --address $bidderAddress $BLOCKCHAIN) \
+    --tx-out "$scriptHash + $output" \
+    --tx-out-datum-hash $scriptDatumHash \
+    --tx-out "$bidderAddress + 2000000 lovelace $extraOutput" \
+    --change-address $bidderAddress \
     --protocol-params-file scripts/$BLOCKCHAIN_PREFIX/protocol-parameters.json \
-    --invalid-before $startSlot\
-    --invalid-hereafter $nextTenSlots \
     --out-file $bodyFile
 
 echo "saved transaction to $bodyFile"
 
 cardano-cli transaction sign \
-   --tx-body-file $bodyFile \
-   --signing-key-file $signingKey \
-   $BLOCKCHAIN \
-   --out-file $outFile
+    --tx-body-file $bodyFile \
+    --signing-key-file $signingKey \
+    $BLOCKCHAIN \
+    --out-file $outFile
 
 echo "signed transaction and saved as $outFile"
 
 cardano-cli transaction submit \
-  $BLOCKCHAIN \
-  --tx-file $outFile
+ $BLOCKCHAIN \
+ --tx-file $outFile
 
 echo "submitted transaction"
 

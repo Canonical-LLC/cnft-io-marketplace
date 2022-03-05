@@ -3,9 +3,10 @@ thisDir=$(dirname "$0")
 baseDir=$thisDir/../
 tempDir=$baseDir/../temp
 
+offset=${1:-500000}
 DATUM_PREFIX=${2:-0}
 
-$baseDir/update-start-time.sh $1 $DATUM_PREFIX
+$baseDir/update-start-time.sh $offset $DATUM_PREFIX
 
 sleep 2
 

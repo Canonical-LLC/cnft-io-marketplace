@@ -37,6 +37,7 @@ library
   exposed-modules:
     Canonical.Auction
     Canonical.Escrow
+    Canonical.Shared
   build-depends:
     , aeson
     , bytestring

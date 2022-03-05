@@ -10,8 +10,10 @@ import Canonical.Escrow
 import Prelude
 
 data Options = Options
-  { batcherOutput :: FilePath
-  , escrowOutput  :: FilePath
+  { batcherOutput     :: FilePath
+  , batcherHashOutput :: FilePath
+  , escrowOutput      :: FilePath
+  , escrowHashOutput  :: FilePath
   } deriving (Show, Generic)
 
 instance ParseRecord Options where
@@ -27,6 +29,10 @@ run Options{..} = do
     Left err -> print $ displayError err
     Right () -> putStrLn $ "wrote validator to file " ++ escrowOutput
 
-  writeFileTextEnvelope batcherOutput Nothing script >>= \case
+  writeFile escrowHashOutput $ show escrowValidatorHash
+
+  writeFileTextEnvelope batcherOutput Nothing auctionScript >>= \case
     Left err -> print $ displayError err
     Right () -> putStrLn $ "wrote validator to file " ++ batcherOutput
+
+  writeFile batcherHashOutput $ show auctionScriptHash

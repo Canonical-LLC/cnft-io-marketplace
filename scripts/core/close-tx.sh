@@ -18,7 +18,7 @@ scriptHash=$(cat $baseDir/$BLOCKCHAIN_PREFIX/auction.addr)
 
 bodyFile=temp/close-tx-body.01
 outFile=temp/close-tx.01
-redeemerFile="$tempDir/$BLOCKCHAIN_PREFIX/redeemers/close.json"
+redeemerFile="$baseDir/redeemers/close.json"
 utxoScript=$(scripts/query/sc.sh | grep $datumHash | grep $value | head -n 1 | cardano-cli-balance-fixer parse-as-utxo)
 output1="1724100 lovelace + 1 $value"
 currentSlot=$(cardano-cli query tip $BLOCKCHAIN | jq .slot)
