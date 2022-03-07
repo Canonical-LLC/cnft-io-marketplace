@@ -7,22 +7,23 @@ module Canonical.Auction
   , mergeSort
   ) where
 
-import Cardano.Api.Shelley (PlutusScript (..), PlutusScriptV1)
-import Codec.Serialise
-import Canonical.Escrow
+import           Cardano.Api.Shelley (PlutusScript (..), PlutusScriptV1)
+import           Codec.Serialise
+import           Canonical.Escrow
 import qualified Data.ByteString.Lazy as LB
 import qualified Data.ByteString.Short as SBS
 import           Ledger
 import qualified Ledger.Typed.Scripts as Scripts
 import           PlutusTx
-import PlutusTx.Prelude
+import           PlutusTx.Prelude
 import qualified Ledger.Ada as Ada
-import qualified Ledger.Value as Value
 import qualified PlutusTx.AssocMap as A
-import Plutus.V1.Ledger.Credential
+import           Ledger.Value
+import           Plutus.V1.Ledger.Credential
 import qualified PlutusTx.AssocMap as M
 import           PlutusTx.AssocMap (Map)
-import Canonical.Shared
+import           Canonical.Shared
+import           Canonical.BidMinter
 
 #define DEBUG
 
@@ -34,63 +35,12 @@ import Canonical.Shared
 #define TRACE_ERROR(a) error ()
 #endif
 
-data BidEscrow = BidEscrow
-  { beAmount :: Integer
-  , beValue  :: Value
-  }
-
-type BidEscrowLockerInput = EscrowLockerInput BidEscrow
-
-extractDatum :: [(DatumHash, Datum)] -> DatumHash -> Datum
-extractDatum datums dh = go datums where
-  go = \case
-    [] -> TRACE_ERROR("Failed to find datum")
-    (x, y):xs ->
-      if x == dh then
-        y
-      else
-        go xs
-
-extractDatumBytes :: [(DatumHash, Datum)] -> DatumHash -> BuiltinData
-extractDatumBytes datums dh = getDatum $ extractDatum datums dh
-
-convertInputs
-  :: UnsafeFromData a
-  => [TxInInfo]
-  -> [(DatumHash, Datum)]
-  -> ValidatorHash
-  -> [(a, Value)]
-convertInputs ins datums vh = go [] ins  where
-  go acc = \case
-    [] -> acc
-    TxInInfo
-      {txInInfoResolved = TxOut
-        { txOutDatumHash = mdh
-        , txOutAddress = Address {..}
-        , txOutValue
-        }
-      }:xs ->
-
-        if ScriptCredential vh == addressCredential then
-          case mdh of
-            Just dh ->
-              go  ( ( unsafeFromBuiltinData (extractDatumBytes datums dh)
-                    , txOutValue
-                    )
-                  : acc
-                  )
-                  xs
-            Nothing -> TRACE_ERROR("Script input missing datum hash")
-        else
-          go acc xs
+type BidEscrowLockerInput = EscrowLockerInput BidData
 
 -------------------------------------------------------------------------------
 -- Types
 -------------------------------------------------------------------------------
-data Bid = Bid
-  { bidBidder :: PubKeyHash
-  , bidAmount :: Integer
-  }
+
 
 data Auction = Auction
   { aSeller            :: PubKeyHash
@@ -101,6 +51,7 @@ data Auction = Auction
   , aHighBid           :: (Maybe Bid)
   , aEscrowValidator   :: ValidatorHash
   , aValue             :: Value
+  , aBidMinterPolicyId :: CurrencySymbol
   }
 
 data Action = CollectBids | Close
@@ -121,17 +72,10 @@ instance Eq Auction where
     && (aHighBid           x == aHighBid           y)
     && (aEscrowValidator   x == aEscrowValidator   y)
     && (aValue             x == aValue             y)
-
-instance Eq Bid where
-  {-# INLINABLE (==) #-}
-  x == y
-    =  (bidBidder x == bidBidder y)
-    && (bidAmount x == bidAmount y)
+    && (aBidMinterPolicyId x == aBidMinterPolicyId y)
 
 
-PlutusTx.unstableMakeIsData ''BidEscrow
 PlutusTx.unstableMakeIsData ''Auction
-PlutusTx.unstableMakeIsData ''Bid
 PlutusTx.unstableMakeIsData ''Action
 
 
@@ -281,7 +225,7 @@ expectedScripts TxInfo {..} auctionValidator escrowValidator =
   in TRACE_IF_FALSE("Has own of this auctionValidator", onlyOneAuctionScript)
   && TRACE_IF_FALSE("Invalid script inputs", onlyAuctionOrEscrow)
 
--- Verify that there is only one script input and get it's value.
+-- Verify that there is only one script input and get it's Value.
 getScriptValue :: TxInfo -> ValidatorHash -> Value
 getScriptValue TxInfo {..} theValidator =
   let
@@ -309,8 +253,8 @@ mergeBids
       M.empty
 
 bidIsPaid :: TxInfo -> (PubKeyHash, Integer) -> Bool
-bidIsPaid info (bid, amount)
-  = Value.valueOf (valuePaidTo info bid) Ada.adaSymbol Ada.adaToken
+bidIsPaid info (theUser, amount)
+  = valueOf (valuePaidTo info theUser) Ada.adaSymbol Ada.adaToken
   >= amount
 
 partitionBids :: [Bid] -> (Bid, [Bid])
@@ -325,12 +269,12 @@ partitionBids _ = TRACE_ERROR("expected non-empty bids")
 convertEscrowInputToBid :: BidEscrowLockerInput -> Bid
 convertEscrowInputToBid EscrowLockerInput {..} = Bid
   { bidBidder = eliOwner
-  , bidAmount = beAmount $ eliData
+  , bidAmount = bdBid eliData
   }
 
 bidHasEnoughAda :: (Bid, Value, Value) -> Bool
 bidHasEnoughAda (Bid{..}, _, v)
-  =  Value.valueOf v Ada.adaSymbol Ada.adaToken
+  =  valueOf v Ada.adaSymbol Ada.adaToken
   >= bidAmount
 {-
 This is an auction validator. It is configured with an asset, reserve price,
@@ -353,9 +297,9 @@ mkValidator auction@Auction {..} action ctx =
     info :: TxInfo
     info@TxInfo {..} = scriptContextTxInfo ctx
 
-    -- Helper to make sure the pkh is paid at least the value.
+    -- Helper to make sure the pkh is paid at least the
     getsValue :: PubKeyHash -> Value -> Bool
-    getsValue h v = valuePaidTo info h `Value.geq` v
+    getsValue h v = valuePaidTo info h `geq` v
 
     -- The value we expect on the script input based on
     -- datum.
@@ -375,7 +319,7 @@ mkValidator auction@Auction {..} action ctx =
     -- Ensure the value is on the script address and there is
     -- only one script input.
     correctInputValue :: Bool
-    correctInputValue = actualScriptValue `Value.geq` expectedScriptValue
+    correctInputValue = actualScriptValue `geq` expectedScriptValue
 
   -- Always perform the input check
   in traceIfFalse "wrong input value" correctInputValue
@@ -386,11 +330,23 @@ mkValidator auction@Auction {..} action ctx =
         escrowBidsAndValues :: [(Bid, Value, Value)]
         escrowBidsAndValues = case convertInputs txInfoInputs txInfoData aEscrowValidator of
           [] -> TRACE_ERROR("Missing bid inputs")
-          xs -> map (\(x, y) -> (convertEscrowInputToBid x, beValue (eliData x), y)) xs
+          xs -> map (\(x, y) -> (convertEscrowInputToBid x, bdValue (eliData x), y)) xs
+
+        hasBidToken :: Bool
+        hasBidToken =
+          all (\(_, _, Value v) -> case M.lookup aBidMinterPolicyId v of
+                  Nothing -> False
+                  Just m -> case M.toList m of
+                    [(TokenName tn, c)]
+                      | c == 1 -> ValidatorHash tn == aEscrowValidator
+                      | otherwise -> False
+                    _ -> False
+              )
+              escrowBidsAndValues
 
         bidsAreForTheRightAuction :: Bool
         bidsAreForTheRightAuction =
-          all (`Value.geq` aValue) (map (\(_, v, _) -> v) escrowBidsAndValues)
+          all (`geq` aValue) (map (\(_, v, _) -> v) escrowBidsAndValues)
 
         ensureBidsHaveEnoughAda :: Bool
         ensureBidsHaveEnoughAda = all bidHasEnoughAda escrowBidsAndValues
@@ -403,6 +359,7 @@ mkValidator auction@Auction {..} action ctx =
           Nothing -> []
           Just x  -> [x]
 
+        -- We need to return the expired bids
         (theBid, toReturn) = partitionBids (currentHighestBidder <> escrowBids)
 
         allLowerBidsReturnedToOwners :: Bool
@@ -447,7 +404,7 @@ mkValidator auction@Auction {..} action ctx =
         -- The new value on the script should be the aValue
         correctBidOutputValue :: Bool
         correctBidOutputValue =
-          txOutValue ownOutput `Value.geq` (actualScriptValue <> Ada.lovelaceValueOf bidDiff)
+          txOutValue ownOutput `geq` (actualScriptValue <> Ada.lovelaceValueOf bidDiff)
 
         -- Bidding is allowed if the start time is before the tx interval
         -- deadline is later than the valid tx
@@ -465,6 +422,7 @@ mkValidator auction@Auction {..} action ctx =
       && traceIfFalse "Some bids do not have enough ada" ensureBidsHaveEnoughAda
       && traceIfFalse "Some bids are for a different auction" bidsAreForTheRightAuction
       && traceIfFalse "Has incorrect scripts" hasValidatorScripts
+      && traceIfFalse "Missing bid token" hasBidToken
 
     Close ->
       let

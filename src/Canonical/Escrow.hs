@@ -12,8 +12,10 @@ import qualified Data.ByteString.Short as BSS
 import           Codec.Serialise
 import qualified Ledger.Typed.Scripts as Scripts
 import qualified Plutus.V1.Ledger.Scripts as Scripts
-import Cardano.Api.Shelley (PlutusScript (..), PlutusScriptV1)
+import           Cardano.Api.Shelley (PlutusScript (..), PlutusScriptV1)
 import           Canonical.Shared
+import qualified PlutusTx.AssocMap as M
+import           Ledger.Value
 
 #define DEBUG
 
@@ -32,7 +34,7 @@ data EscrowAddress = EscrowAddress
 
 data EscrowTxOut = EscrowTxOut
   { etxOutAddress             :: EscrowAddress
-  , etxOutValue               :: BuiltinData
+  , etxOutValue               :: Value
   , etxOutDatumHash           :: BuiltinData
   }
 
@@ -48,7 +50,7 @@ data EscrowScriptContext = EscrowScriptContext
 
 data EscrowTxInfo = EscrowTxInfo
   { etxInfoInputs             :: [EscrowTxInInfo]
-  , etxInfoOutputs            :: BuiltinData
+  , etxInfoOutputs            :: [EscrowTxOut]
   , etxInfoFee                :: BuiltinData
   , etxInfoMint               :: BuiltinData
   , etxInfoDCert              :: BuiltinData
@@ -63,6 +65,7 @@ data EscrowLockerInput a = EscrowLockerInput
   { eliOwner              :: PubKeyHash
   , eliData               :: a
   , eliUnlockingValidator :: ValidatorHash
+  , eliWitnessPolicyId    :: CurrencySymbol
   }
 
 data EscrowUnlockerAction
@@ -77,9 +80,6 @@ makeIsDataIndexed ''EscrowTxInfo [('EscrowTxInfo,0)]
 makeIsDataIndexed ''EscrowLockerInput [('EscrowLockerInput,0)]
 makeIsDataIndexed ''EscrowUnlockerAction [('Cancel,0), ('Unlock, 1)]
 
-etxSignedBy :: EscrowTxInfo -> PubKeyHash -> Bool
-etxSignedBy EscrowTxInfo {..} pkh = any (== pkh) etxInfoSignatories
-
 validateEscrow
   :: EscrowLockerInput BuiltinData
   -> EscrowUnlockerAction
@@ -89,9 +89,20 @@ validateEscrow
   EscrowLockerInput {..}
   action
   EscrowScriptContext
-    { eScriptContextTxInfo = info
+    { eScriptContextTxInfo = EscrowTxInfo {..}
     } = case action of
-          Cancel -> info `etxSignedBy` eliOwner
+          Cancel ->
+            let
+              outputDoesNotContainWitnessToken :: Bool
+              outputDoesNotContainWitnessToken = go etxInfoOutputs where
+                go = \case
+                  [] -> True
+                  EscrowTxOut {..} : xs
+                    | M.member eliWitnessPolicyId (getValue etxOutValue) -> False
+                    | otherwise -> go xs
+
+            in any (== eliOwner) etxInfoSignatories
+            && outputDoesNotContainWitnessToken
           Unlock -> any (\EscrowTxInInfo
                             { etxInInfoResolved = EscrowTxOut
                               { etxOutAddress = EscrowAddress {..}
@@ -99,7 +110,7 @@ validateEscrow
                             } ->
                               ScriptCredential eliUnlockingValidator == eAddressCredential
                         )
-                        (etxInfoInputs info)
+                        etxInfoInputs
 
 wrapValidateEscrow
     :: BuiltinData

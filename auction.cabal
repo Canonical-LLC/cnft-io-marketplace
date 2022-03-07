@@ -38,6 +38,7 @@ library
     Canonical.Auction
     Canonical.Escrow
     Canonical.Shared
+    Canonical.BidMinter
   build-depends:
     , aeson
     , bytestring
