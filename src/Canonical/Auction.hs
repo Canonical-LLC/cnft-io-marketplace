@@ -44,7 +44,7 @@ type BidEscrowLockerInput = EscrowLockerInput BidData
 
 data Auction = Auction
   { aSeller            :: PubKeyHash
-  , aStartTime         :: POSIXTime
+  , aStartTime         :: Maybe POSIXTime
   , aDeadline          :: POSIXTime
   , aBatcherDeadline   :: POSIXTime
   , aMinBid            :: Integer
@@ -268,9 +268,9 @@ partitionBids (x:xs) = go x [] xs where
       | otherwise   -> go highest (y:prev) ys
 partitionBids _ = TRACE_ERROR("expected non-empty bids")
 
-convertEscrowInputToBid :: POSIXTime -> POSIXTime -> BidEscrowLockerInput -> Bid
+convertEscrowInputToBid :: Maybe POSIXTime -> POSIXTime -> BidEscrowLockerInput -> Bid
 convertEscrowInputToBid startTime deadline EscrowLockerInput {..} =
-  if startTime `before` bdBidValidRange eliData &&
+  if fromMaybe 0 startTime `before` bdBidValidRange eliData &&
     deadline `after` bdBidValidRange eliData then
     Bid
       { bidBidder = eliOwner
