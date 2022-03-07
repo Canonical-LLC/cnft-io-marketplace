@@ -21,6 +21,9 @@ import           PlutusTx
 import           PlutusTx.Prelude
 import           Plutus.V1.Ledger.Credential
 import           Canonical.Escrow
+import           Canonical.Shared
+import qualified PlutusTx.AssocMap as M
+
 
 #define DEBUG
 
@@ -46,6 +49,31 @@ data BidData = BidData
 
 PlutusTx.unstableMakeIsData ''BidData
 
+data BidTxInfo = BidTxInfo
+  { btxInfoInputs             :: BuiltinData
+  , btxInfoOutputs            :: [TxOut]
+  , btxInfoFee                :: BuiltinData
+  , btxInfoMint               :: Value
+  , btxInfoDCert              :: BuiltinData
+  , btxInfoWdrl               :: BuiltinData
+  , btxInfoValidRange         :: POSIXTimeRange
+  , btxInfoSignatories        :: BuiltinData
+  , btxInfoData               :: [(DatumHash, Datum)]
+  , btxInfoId                 :: BuiltinData
+  }
+
+data BidScriptPurpose
+    = BMinting CurrencySymbol
+
+data BidScriptContext = BidScriptContext
+  { bScriptContextTxInfo  :: BidTxInfo
+  , bScriptContextPurpose :: BidScriptPurpose
+  }
+
+PlutusTx.unstableMakeIsData ''BidTxInfo
+PlutusTx.unstableMakeIsData ''BidScriptPurpose
+PlutusTx.unstableMakeIsData ''BidScriptContext
+
 {-# INLINABLE convertOutput #-}
 convertOutput
   :: UnsafeFromData a
@@ -63,26 +91,24 @@ lovelaces = getLovelace . fromValue
 hasSingleToken :: Value -> CurrencySymbol -> TokenName -> Bool
 hasSingleToken v c t = valueOf v c t == 1
 
-mkPolicy :: Action -> ScriptContext -> Bool
-mkPolicy action ctx@ScriptContext { scriptContextTxInfo = TxInfo {..} } = case action of
-  A_Burn ->
-    let
-      theCurrencySymbol :: CurrencySymbol
-      theCurrencySymbol = ownCurrencySymbol ctx
 
-    in  case flattenValue txInfoMint of
+
+mkPolicy :: Action -> BidScriptContext -> Bool
+mkPolicy action BidScriptContext
+    { bScriptContextTxInfo  = BidTxInfo {..}
+    , bScriptContextPurpose = BMinting theCurrencySymbol
+    } = case action of
+  A_Burn -> case flattenValue btxInfoMint of
           [(sym, _, c)]
             -> sym == theCurrencySymbol
             && c < 0
           _ -> False
   A_Mint ->
+
     let
-      theCurrencySymbol :: CurrencySymbol
-      theCurrencySymbol = ownCurrencySymbol ctx
 
       onlyOutput :: TxOut
-      onlyOutput = case filter (\x -> hasSingleToken (txOutValue x) theCurrencySymbol
-          outputTokenName) txInfoOutputs of
+      onlyOutput = case filter (\x -> M.member theCurrencySymbol (getValue (txOutValue x))) btxInfoOutputs of
         [o] -> o
         _ -> traceError "Expected exactly one output"
 
@@ -98,16 +124,16 @@ mkPolicy action ctx@ScriptContext { scriptContextTxInfo = TxInfo {..} } = case a
       onlyOneTokenMinted :: Bool
       onlyOneTokenMinted =
         hasSingleToken
-          txInfoMint
+          btxInfoMint
           theCurrencySymbol
           outputTokenName
 
       correctTokenMinted = traceIfFalse "Wrong mint amount!" onlyOneTokenMinted
 
-      escrowValue :: Value
 
+      escrowValue :: Value
       (EscrowLockerInput { eliData = BidData { bdBid, bdValidStartTime, bdValidEndTime }}, escrowValue) =
-        convertOutput txInfoData onlyOutput
+        convertOutput btxInfoData onlyOutput
 
       bidAmountCorrect =
         traceIfFalse "Output bid amount mismatch"
@@ -115,7 +141,7 @@ mkPolicy action ctx@ScriptContext { scriptContextTxInfo = TxInfo {..} } = case a
 
       bidValidRangeCorrect =
         traceIfFalse "Output bid validity range mismatch"
-          ( interval bdValidStartTime bdValidEndTime `contains` txInfoValidRange)
+          ( interval bdValidStartTime bdValidEndTime `contains` btxInfoValidRange)
 
     in correctTokenMinted
     && bidAmountCorrect
@@ -125,7 +151,7 @@ mkPolicy action ctx@ScriptContext { scriptContextTxInfo = TxInfo {..} } = case a
 -- Entry Points
 -------------------------------------------------------------------------------
 wrappedPolicy :: WrappedMintingPolicyType
-wrappedPolicy = wrapMintingPolicy mkPolicy
+wrappedPolicy = wrapMint mkPolicy
 
 policy :: MintingPolicy
 policy = mkMintingPolicyScript $$(compile [|| wrappedPolicy ||])

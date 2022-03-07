@@ -9,4 +9,5 @@ $baseDir/core/bid-tx.sh \
   $(cat ~/$BLOCKCHAIN_PREFIX/buyer.addr) \
   ~/$BLOCKCHAIN_PREFIX/buyer.skey \
   $(cat $tempDir/$BLOCKCHAIN_PREFIX/datums/$DATUM_PREFIX/escrow-bid-1-hash.txt) \
+  $tempDir/$BLOCKCHAIN_PREFIX/datums/$DATUM_PREFIX/escrow-bid-1.json \
   "10000000 lovelace"

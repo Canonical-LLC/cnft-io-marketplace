@@ -446,6 +446,9 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/escrow-bid-1.json
     },
     {
       "bytes": "$batcherValidatorHash"
+    },
+    {
+      "bytes": "$bidMinterHash"
     }
   ]
 }
@@ -502,6 +505,9 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/escrow-bid-2.json
     },
     {
       "bytes": "$batcherValidatorHash"
+    },
+    {
+      "bytes": "$bidMinterHash"
     }
   ]
 }
@@ -557,6 +563,9 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/escrow-bid-3.json
     },
     {
       "bytes": "$batcherValidatorHash"
+    },
+    {
+      "bytes": "$bidMinterHash"
     }
   ]
 }

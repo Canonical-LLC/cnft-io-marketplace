@@ -14,7 +14,8 @@ nftValidatorFile=$baseDir/escrow.plutus
 bidderAddress=$1
 signingKey=$2
 scriptDatumHash=$3
-output=$4
+scriptDatumFile=$4
+output=$5
 scriptAddr=$(cat $baseDir/$BLOCKCHAIN_PREFIX/escrow.addr)
 scriptHash=$(cat $baseDir/escrow-hash.txt)
 
@@ -44,7 +45,8 @@ cardano-cli transaction build \
     --tx-in-collateral $(cardano-cli-balance-fixer collateral --address $bidderAddress $BLOCKCHAIN) \
     --tx-out "$scriptAddr + $output + $mintValue" \
     --tx-out-datum-hash $scriptDatumHash \
-    --tx-out "$bidderAddress + 2000000 lovelace $extraOutput" \
+    --tx-out-datum-embed-file $scriptDatumFile \
+    --tx-out "$bidderAddress + 2137884 lovelace $extraOutput" \
     --change-address $bidderAddress \
     --protocol-params-file scripts/$BLOCKCHAIN_PREFIX/protocol-parameters.json \
     --mint "$mintValue" \

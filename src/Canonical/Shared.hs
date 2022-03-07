@@ -97,3 +97,18 @@ wrap f a b c
         ( FROM_BUILT_IN_DATA("redeemer failed", b))
         ( FROM_BUILT_IN_DATA("script context failed", c))
     )
+
+wrapMint  :: forall a b .
+            ( DataConstraint(a)
+            , DataConstraint(b)
+            )
+      => (a -> b -> Bool)
+      -> BuiltinData
+      -> BuiltinData
+      -> ()
+wrapMint f a b
+  = check
+    ( f
+        ( FROM_BUILT_IN_DATA("redeemer failed", a))
+        ( FROM_BUILT_IN_DATA("script context failed", b))
+    )
