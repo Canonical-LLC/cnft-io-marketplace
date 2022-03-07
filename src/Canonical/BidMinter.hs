@@ -37,10 +37,11 @@ data Action = A_Mint | A_Burn
 PlutusTx.unstableMakeIsData ''Action
 
 data BidData = BidData
-  { bdValue         :: Value
-  , bdBid           :: Integer
-  , bdBidValidRange :: POSIXTimeRange
-  , bdExpiration    :: POSIXTime
+  { bdBid            :: Integer
+  , bdValue          :: Value
+  , bdValidStartTime :: POSIXTime
+  , bdValidEndTime   :: POSIXTime
+  , bdExpiration     :: POSIXTime
   }
 
 PlutusTx.unstableMakeIsData ''BidData
@@ -105,7 +106,7 @@ mkPolicy action ctx@ScriptContext { scriptContextTxInfo = TxInfo {..} } = case a
 
       escrowValue :: Value
 
-      (EscrowLockerInput { eliData = BidData { bdBid, bdBidValidRange }}, escrowValue) =
+      (EscrowLockerInput { eliData = BidData { bdBid, bdValidStartTime, bdValidEndTime }}, escrowValue) =
         convertOutput txInfoData onlyOutput
 
       bidAmountCorrect =
@@ -114,7 +115,7 @@ mkPolicy action ctx@ScriptContext { scriptContextTxInfo = TxInfo {..} } = case a
 
       bidValidRangeCorrect =
         traceIfFalse "Output bid validity range mismatch"
-          (txInfoValidRange == bdBidValidRange)
+          ( interval bdValidStartTime bdValidEndTime `contains` txInfoValidRange)
 
     in correctTokenMinted
     && bidAmountCorrect

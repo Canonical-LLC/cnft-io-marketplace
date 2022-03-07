@@ -7,6 +7,8 @@ offset=${1:-500000}
 nowSeconds=$(date +%s)
 now=$(($nowSeconds*1000))
 timestamp=$(($nowSeconds*1000+$offset))
+batcherOffset=120
+batcherEndTime=$(($batcherOffset*1000+$timestamp))
 prefix=${2:-0}
 
 mkdir -p $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix
@@ -19,6 +21,7 @@ buyerPkh=$(cat $tempDir/$BLOCKCHAIN_PREFIX/pkhs/buyer-pkh.txt)
 buyer1Pkh=$(cat $tempDir/$BLOCKCHAIN_PREFIX/pkhs/buyer1-pkh.txt)
 batcherValidatorHash=$(cat $thisDir/auction-hash.txt)
 escrowValidatorHash=$(cat $thisDir/escrow-hash.txt)
+bidMinterHash=$(cat $thisDir/bid-minter-hash.txt)
 
 cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/start.json
 {
@@ -32,6 +35,9 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/start.json
     },
     {
       "int": $timestamp
+    },
+    {
+      "int": $batcherEndTime
     },
     {
       "int": 8000000
@@ -93,6 +99,9 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/start.json
           }
         }
       ]
+    },
+    {
+      "bytes": $bidMinterHash
     }
   ]
 }
@@ -111,6 +120,9 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/bid-1.json
     },
     {
       "int": $timestamp
+    },
+    {
+      "int": $batcherEndTime
     },
     {
       "int": 8000000
@@ -183,6 +195,9 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/bid-1.json
           }
         }
       ]
+    },
+    {
+      "bytes": $bidMinterHash
     }
   ]
 }
@@ -201,6 +216,9 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/seller-bid-1.json
     },
     {
       "int": $timestamp
+    },
+    {
+      "int": $batcherEndTime
     },
     {
       "int": 8000000
@@ -273,6 +291,9 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/seller-bid-1.json
           }
         }
       ]
+    },
+    {
+      "bytes": $bidMinterHash
     }
   ]
 }
@@ -291,6 +312,9 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/bid-2.json
     },
     {
       "int": $timestamp
+    },
+    {
+      "int": $batcherEndTime
     },
     {
       "int": 8000000
@@ -363,6 +387,9 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/bid-2.json
           }
         }
       ]
+    },
+    {
+      "bytes": $bidMinterHash
     }
   ]
 }
@@ -404,6 +431,12 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/escrow-bid-1.json
               }
             }
           ]
+        },
+        {
+          "int":
+        },
+        {
+          "int": $batcherEndTime
         }
       ]
     },
