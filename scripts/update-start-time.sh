@@ -7,6 +7,7 @@ offset=${1:-500000}
 nowSeconds=$(date +%s)
 now=$(($nowSeconds*1000))
 timestamp=$(($nowSeconds*1000+$offset))
+endValidTime=$(($timestamp - 60000))
 batcherOffset=120
 batcherEndTime=$(($batcherOffset*1000+$timestamp))
 prefix=${2:-0}
@@ -101,7 +102,7 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/start.json
       ]
     },
     {
-      "bytes": $bidMinterHash
+      "bytes": "$bidMinterHash"
     }
   ]
 }
@@ -197,7 +198,7 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/bid-1.json
       ]
     },
     {
-      "bytes": $bidMinterHash
+      "bytes": "$bidMinterHash"
     }
   ]
 }
@@ -293,7 +294,7 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/seller-bid-1.json
       ]
     },
     {
-      "bytes": $bidMinterHash
+      "bytes": "$bidMinterHash"
     }
   ]
 }
@@ -389,7 +390,7 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/bid-2.json
       ]
     },
     {
-      "bytes": $bidMinterHash
+      "bytes": "$bidMinterHash"
     }
   ]
 }
@@ -433,7 +434,10 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/escrow-bid-1.json
           ]
         },
         {
-          "int":
+          "int": $now
+        },
+        {
+          "int": $endValidTime
         },
         {
           "int": $batcherEndTime
@@ -484,6 +488,15 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/escrow-bid-2.json
               }
             }
           ]
+        },
+        {
+          "int": $now
+        },
+        {
+          "int": $endValidTime
+        },
+        {
+          "int": $batcherEndTime
         }
       ]
     },
@@ -530,6 +543,15 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/escrow-bid-3.json
               }
             }
           ]
+        },
+        {
+          "int": $now
+        },
+        {
+          "int": $endValidTime
+        },
+        {
+          "int": $batcherEndTime
         }
       ]
     },
