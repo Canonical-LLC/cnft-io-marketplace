@@ -46,6 +46,7 @@ data Auction = Auction
   { aSeller            :: PubKeyHash
   , aStartTime         :: POSIXTime
   , aDeadline          :: POSIXTime
+  , aBatcherDeadline   :: POSIXTime
   , aMinBid            :: Integer
   , aPayoutPercentages :: (A.Map PubKeyHash Integer)
   , aHighBid           :: (Maybe Bid)
@@ -67,6 +68,7 @@ instance Eq Auction where
     =  (aSeller            x == aSeller            y)
     && (aStartTime         x == aStartTime         y)
     && (aDeadline          x == aDeadline          y)
+    && (aBatcherDeadline   x == aBatcherDeadline   y)
     && (aMinBid            x == aMinBid            y)
     && (aPayoutPercentages x == aPayoutPercentages y)
     && (aHighBid           x == aHighBid           y)
@@ -266,11 +268,16 @@ partitionBids (x:xs) = go x [] xs where
       | otherwise   -> go highest (y:prev) ys
 partitionBids _ = TRACE_ERROR("expected non-empty bids")
 
-convertEscrowInputToBid :: BidEscrowLockerInput -> Bid
-convertEscrowInputToBid EscrowLockerInput {..} = Bid
-  { bidBidder = eliOwner
-  , bidAmount = bdBid eliData
-  }
+convertEscrowInputToBid :: POSIXTime -> POSIXTime -> BidEscrowLockerInput -> Bid
+convertEscrowInputToBid startTime deadline EscrowLockerInput {..} =
+  if startTime `before` bdBidValidRange eliData &&
+    deadline `after` bdBidValidRange eliData then
+    Bid
+      { bidBidder = eliOwner
+      , bidAmount = bdBid eliData
+      }
+  else
+    TRACE_ERROR("bid expired")
 
 bidHasEnoughAda :: (Bid, Value, Value) -> Bool
 bidHasEnoughAda (Bid{..}, _, v)
@@ -330,7 +337,7 @@ mkValidator auction@Auction {..} action ctx =
         escrowBidsAndValues :: [(Bid, Value, Value)]
         escrowBidsAndValues = case convertInputs txInfoInputs txInfoData aEscrowValidator of
           [] -> TRACE_ERROR("Missing bid inputs")
-          xs -> map (\(x, y) -> (convertEscrowInputToBid x, bdValue (eliData x), y)) xs
+          xs -> map (\(x, y) -> (convertEscrowInputToBid aStartTime aDeadline x, bdValue (eliData x), y)) xs
 
         hasBidToken :: Bool
         hasBidToken =
@@ -406,18 +413,9 @@ mkValidator auction@Auction {..} action ctx =
         correctBidOutputValue =
           txOutValue ownOutput `geq` (actualScriptValue <> Ada.lovelaceValueOf bidDiff)
 
-        -- Bidding is allowed if the start time is before the tx interval
-        -- deadline is later than the valid tx
-        -- range. The deadline is in the future.
-        correctBidSlotRange :: Bool
-        correctBidSlotRange
-          =  aStartTime `before` txInfoValidRange
-          && aDeadline `after` txInfoValidRange
-
       in traceIfFalse "bid too low"        (sufficientBid $ bidAmount theBid)
       && traceIfFalse "wrong output datum" (correctBidOutputDatum theBid)
       && traceIfFalse "wrong output value" correctBidOutputValue
-      && traceIfFalse "too late"           correctBidSlotRange
       && traceIfFalse "All bids but the highest were not returned" allLowerBidsReturnedToOwners
       && traceIfFalse "Some bids do not have enough ada" ensureBidsHaveEnoughAda
       && traceIfFalse "Some bids are for a different auction" bidsAreForTheRightAuction
@@ -429,7 +427,7 @@ mkValidator auction@Auction {..} action ctx =
         -- Closing is allowed if the deadline is before than the valid tx
         -- range. The deadline is past.
         correctCloseSlotRange :: Bool
-        correctCloseSlotRange = aDeadline `before` txInfoValidRange
+        correctCloseSlotRange = aBatcherDeadline `before` txInfoValidRange
 
       in traceIfFalse "too early" correctCloseSlotRange
       && case aHighBid of
