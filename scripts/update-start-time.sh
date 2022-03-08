@@ -6,6 +6,7 @@ offset=${1:-500000}
 
 nowSeconds=$(date +%s)
 now=$(($nowSeconds*1000))
+beforeTime=$((now - (100*1000)))
 timestamp=$(($nowSeconds*1000+$offset))
 endValidTime=$(($timestamp - 60000))
 batcherOffset=120
@@ -434,7 +435,7 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/escrow-bid-1.json
           ]
         },
         {
-          "int": $now
+          "int": $beforeTime
         },
         {
           "int": $endValidTime
@@ -493,7 +494,7 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/escrow-bid-2.json
           ]
         },
         {
-          "int": $now
+          "int": $beforeTime
         },
         {
           "int": $endValidTime
@@ -551,7 +552,7 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/escrow-bid-3.json
           ]
         },
         {
-          "int": $now
+          "int": $beforeTime
         },
         {
           "int": $endValidTime
