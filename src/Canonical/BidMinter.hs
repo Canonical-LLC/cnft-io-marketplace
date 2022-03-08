@@ -137,7 +137,7 @@ mkPolicy action BidScriptContext
 
       bidAmountCorrect =
         traceIfFalse "Output bid amount mismatch"
-          (bdBid < lovelaces escrowValue)
+          (bdBid <= lovelaces escrowValue)
 
       bidValidRangeCorrect =
         traceIfFalse "Output bid validity range mismatch"
