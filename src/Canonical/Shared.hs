@@ -49,6 +49,12 @@ extractDatum datums dh = go datums where
       else
         go xs
 
+extractData :: forall a. DataConstraint(a) => [(DatumHash, Datum)] -> DatumHash -> a
+extractData ds dh =
+  let
+    a = extractDatumBytes ds dh
+  in FROM_BUILT_IN_DATA("extractData failed", a)
+
 {-# INLINABLE convertInputs #-}
 convertInputs
   :: UnsafeFromData a

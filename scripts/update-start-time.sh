@@ -33,13 +33,6 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/start.json
       "bytes": "$sellerPkh"
     },
     {
-       "constructor": 0,
-       "fields":
-        [ { "int": $now
-          }
-        ]
-    },
-    {
       "int": $timestamp
     },
     {
@@ -122,11 +115,97 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/bid-1.json
       "bytes": "$sellerPkh"
     },
     {
-       "constructor": 0,
-       "fields":
-        [ { "int": $now
+      "int": $timestamp
+    },
+    {
+      "int": $batcherEndTime
+    },
+    {
+      "int": 8000000
+    },
+        {
+      "map": [
+        {
+          "v": {
+            "int": 900
+          },
+          "k": {
+            "bytes": "$sellerPkh"
           }
-        ]
+        },
+        {
+          "v": {
+            "int": 50
+          },
+          "k": {
+            "bytes": "$royaltyPkh"
+          }
+        },
+        {
+          "v": {
+            "int": 50
+          },
+          "k": {
+            "bytes": "$marketplacePkh"
+          }
+        }
+      ]
+    },
+    {
+      "constructor": 0,
+      "fields": [
+        {
+          "constructor": 0,
+          "fields": [
+            {
+              "bytes" : "$buyerPkh"
+            },
+            {
+              "int" : 10000000
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "bytes": "$escrowValidatorHash"
+    },
+    {
+      "map": [
+        {
+          "k": {
+              "bytes": "d6cfdbedd242056674c0e51ead01785497e3a48afbbb146dc72ee1e2"
+            },
+          "v": {
+            "map":[
+              { "k":
+                {
+                  "bytes": "123456"
+                },
+                "v":
+                {
+                  "int": 1
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "bytes": "$bidMinterHash"
+    }
+  ]
+}
+
+EOF
+
+cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/reserve-not-met-bid-1.json
+{
+  "constructor": 0,
+  "fields": [
+    {
+      "bytes": "$sellerPkh"
     },
     {
       "int": $timestamp
@@ -175,7 +254,7 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/bid-1.json
               "bytes" : "$buyerPkh"
             },
             {
-              "int" : 10000000
+              "int" : 7000000
             }
           ]
         }
@@ -427,6 +506,64 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/escrow-bid-1.json
       "fields": [
         {
           "int": 10000000
+        },
+        {
+          "map": [
+            {
+              "k": {
+                  "bytes": "d6cfdbedd242056674c0e51ead01785497e3a48afbbb146dc72ee1e2"
+                },
+              "v": {
+                "map":[
+                  { "k":
+                    {
+                      "bytes": "123456"
+                    },
+                    "v":
+                    {
+                      "int": 1
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "int": $beforeTime
+        },
+        {
+          "int": $endValidTime
+        },
+        {
+          "int": $batcherEndTime
+        }
+      ]
+    },
+    {
+      "bytes": "$batcherValidatorHash"
+    },
+    {
+      "bytes": "$bidMinterHash"
+    }
+  ]
+}
+
+EOF
+
+cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/escrow-reserve-not-met.json
+
+{
+  "constructor": 0,
+  "fields": [
+    {
+      "bytes": "$buyerPkh"
+    },
+    {
+      "constructor": 0,
+      "fields": [
+        {
+          "int": 7000000
         },
         {
           "map": [

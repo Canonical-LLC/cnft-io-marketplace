@@ -38,20 +38,6 @@ fi
 $baseDir/accounts/log-all-accounts.sh $bn 2
 $baseDir/accounts/diff-accounts.sh $bn 1 2
 
-echo Reserve Not Met Fails
-detected=false
-
-"$baseDir/failure-cases/reserve-not-met-tx.sh" || {
-    detected=true
-}
-
-if [ $detected == false ]; then
-  exit 1
-fi
-
-$baseDir/accounts/log-all-accounts.sh $bn 3
-$baseDir/accounts/diff-accounts.sh $bn 2 3
-
 echo First Bid
 $baseDir/happy-path/bid-1-tx.sh
 sleep 2
@@ -68,19 +54,8 @@ $baseDir/wait/until-next-block.sh
 $baseDir/accounts/log-all-accounts.sh $bn 5
 $baseDir/accounts/diff-accounts.sh $bn 4 5
 
-echo Failed Bid
-detected=false
+$baseDir/happy-path/collect-2-tx.sh
 
-"$baseDir/failure-cases/bid-not-high-enough.sh" || {
-    detected=true
-}
-
-if [ $detected == false ]; then
-  exit 1
-fi
-
-$baseDir/accounts/log-all-accounts.sh $bn 6
-$baseDir/accounts/diff-accounts.sh $bn 5 6
 
 endTime=$(date +%s)
 elapsedTime=$(($endTime-$startTime))

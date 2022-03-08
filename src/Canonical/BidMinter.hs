@@ -25,8 +25,6 @@ import           Canonical.Shared
 import qualified PlutusTx.AssocMap as M
 
 
-#define DEBUG
-
 #if defined(DEBUG)
 #define TRACE_IF_FALSE(a,b) traceIfFalse a b
 #define TRACE_ERROR(a) traceError a
@@ -49,9 +47,20 @@ data BidData = BidData
 
 PlutusTx.unstableMakeIsData ''BidData
 
+data BidAddress = BidAddress
+  { baddressCredential        :: Credential
+  , baddressStakingCredential :: BuiltinData
+  }
+
+data BidTxOut = BidTxOut
+  { btxOutAddress             :: BidAddress
+  , btxOutValue               :: Value
+  , btxOutDatumHash           :: Maybe DatumHash
+  }
+
 data BidTxInfo = BidTxInfo
   { btxInfoInputs             :: BuiltinData
-  , btxInfoOutputs            :: [TxOut]
+  , btxInfoOutputs            :: [BidTxOut]
   , btxInfoFee                :: BuiltinData
   , btxInfoMint               :: Value
   , btxInfoDCert              :: BuiltinData
@@ -70,18 +79,19 @@ data BidScriptContext = BidScriptContext
   , bScriptContextPurpose :: BidScriptPurpose
   }
 
+PlutusTx.unstableMakeIsData ''BidAddress
+PlutusTx.unstableMakeIsData ''BidTxOut
 PlutusTx.unstableMakeIsData ''BidTxInfo
 PlutusTx.unstableMakeIsData ''BidScriptPurpose
 PlutusTx.unstableMakeIsData ''BidScriptContext
 
-{-# INLINABLE convertOutput #-}
 convertOutput
   :: UnsafeFromData a
   => [(DatumHash, Datum)]
-  -> TxOut
+  -> BidTxOut
   -> (a, Value)
-convertOutput datums TxOut {txOutDatumHash = Just dh, txOutValue} = case find ((==dh) . fst) datums of
-  Just (_, Datum bs) -> (unsafeFromBuiltinData bs, txOutValue)
+convertOutput datums BidTxOut {btxOutDatumHash = Just dh, btxOutValue} = case find ((==dh) . fst) datums of
+  Just (_, Datum bs) -> (unsafeFromBuiltinData bs, btxOutValue)
   Nothing -> TRACE_ERROR("Could not find the datum")
 convertOutput _ _ = TRACE_ERROR("Output is missing a datum hash")
 
@@ -107,17 +117,17 @@ mkPolicy action BidScriptContext
 
     let
 
-      onlyOutput :: TxOut
-      onlyOutput = case filter (\x -> M.member theCurrencySymbol (getValue (txOutValue x))) btxInfoOutputs of
+      onlyOutput :: BidTxOut
+      onlyOutput = case filter (\x -> M.member theCurrencySymbol (getValue (btxOutValue x))) btxInfoOutputs of
         [o] -> o
-        _ -> traceError "Expected exactly one output"
+        _ -> TRACE_ERROR("Expected exactly one output")
 
-      outputAddress :: Address
-      outputAddress = txOutAddress onlyOutput
+      outputAddress :: BidAddress
+      outputAddress = btxOutAddress onlyOutput
 
       outputTokenName :: TokenName
       outputTokenName = TokenName $ case outputAddress of
-        Address { addressCredential } -> case addressCredential of
+        BidAddress { baddressCredential } -> case baddressCredential of
           PubKeyCredential (PubKeyHash    bs) -> bs
           ScriptCredential (ValidatorHash bs) -> bs
 
@@ -136,12 +146,12 @@ mkPolicy action BidScriptContext
         convertOutput btxInfoData onlyOutput
 
       bidAmountCorrect =
-        traceIfFalse "Output bid amount mismatch"
-          (bdBid <= lovelaces escrowValue)
+        TRACE_IF_FALSE("Output bid amount mismatch",
+          (bdBid <= lovelaces escrowValue))
 
       bidValidRangeCorrect =
-        traceIfFalse "Output bid validity range mismatch"
-          ( interval bdValidStartTime bdValidEndTime `contains` btxInfoValidRange)
+        TRACE_IF_FALSE("Output bid validity range mismatch",
+          ( interval bdValidStartTime bdValidEndTime `contains` btxInfoValidRange))
 
     in correctTokenMinted
     && bidAmountCorrect
