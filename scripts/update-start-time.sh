@@ -7,7 +7,7 @@ offset=${1:-500000}
 nowSeconds=$(date +%s)
 now=$(($nowSeconds*1000))
 beforeTime=$((now - (100*1000)))
-timestamp=$(($nowSeconds*1000+$offset))
+timestamp=$(($nowSeconds*2000+$offset))
 endValidTime=$(($timestamp - 60000))
 batcherOffset=120
 batcherEndTime=$(($batcherOffset*1000+$timestamp))
@@ -33,7 +33,11 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/start.json
       "bytes": "$sellerPkh"
     },
     {
-      "int": $now
+       "constructor": 0,
+       "fields":
+        [ { "int": $now
+          }
+        ]
     },
     {
       "int": $timestamp
@@ -118,7 +122,11 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/bid-1.json
       "bytes": "$sellerPkh"
     },
     {
-      "int": $now
+       "constructor": 0,
+       "fields":
+        [ { "int": $now
+          }
+        ]
     },
     {
       "int": $timestamp
@@ -214,7 +222,11 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/seller-bid-1.json
       "bytes": "$sellerPkh"
     },
     {
-      "int": $now
+       "constructor": 0,
+       "fields":
+        [ { "int": $now
+          }
+        ]
     },
     {
       "int": $timestamp
@@ -310,7 +322,11 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/bid-2.json
       "bytes": "$sellerPkh"
     },
     {
-      "int": $now
+       "constructor": 0,
+       "fields":
+        [ { "int": $now
+          }
+        ]
     },
     {
       "int": $timestamp

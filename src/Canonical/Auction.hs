@@ -269,9 +269,8 @@ partitionBids (x:xs) = go x [] xs where
 partitionBids _ = TRACE_ERROR("expected non-empty bids")
 
 convertEscrowInputToBid :: Maybe POSIXTime -> POSIXTime -> BidEscrowLockerInput -> Bid
-convertEscrowInputToBid startTime deadline EscrowLockerInput {..} =
-  if fromMaybe 0 startTime < bdValidStartTime eliData &&
-    deadline > bdValidEndTime eliData then
+convertEscrowInputToBid _startTime deadline EscrowLockerInput {..} =
+  if bdValidEndTime eliData < deadline then
     Bid
       { bidBidder = eliOwner
       , bidAmount = bdBid eliData

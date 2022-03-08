@@ -17,8 +17,9 @@ bidAmount=${10}
 redeemerFile=$baseDir/redeemers/collect.json
 nftValidatorFile=$baseDir/auction.plutus
 escrowScriptFile=$baseDir/escrow.plutus
-scriptHash=$(cat $baseDir/$BLOCKCHAIN_PREFIX/auction.addr)
+scriptAddr=$(cat $baseDir/$BLOCKCHAIN_PREFIX/auction.addr)
 escrowAddr=$(cat $baseDir/$BLOCKCHAIN_PREFIX/escrow.addr)
+escrowScriptHash=$(cat $baseDir/escrow-hash.txt)
 
 $baseDir/hash-plutus.sh
 bodyFile=temp/bid-tx-body.01
@@ -39,6 +40,11 @@ if [ "$changeOutput" != "" ];then
   extraOutput="+ $changeOutput"
 fi
 
+bidMinterId=$(cat $baseDir/bid-minter-hash.txt)
+bidMinterFile=$baseDir/bid-minter.plutus
+bidMinterRedeemer=$baseDir/redeemers/burn.json
+mintValue="-1 $bidMinterId.$escrowScriptHash"
+
 cardano-cli transaction build \
     --alonzo-era \
     $BLOCKCHAIN \
@@ -53,12 +59,15 @@ cardano-cli transaction build \
     --tx-in-redeemer-file $redeemerFile \
     --required-signer $signingKey \
     --tx-in-collateral $(cardano-cli-balance-fixer collateral --address $buyerAddr $BLOCKCHAIN) \
-    --tx-out "$scriptHash + $output1 + $bidAmount lovelace" \
+    --tx-out "$scriptAddr + $output1 + $bidAmount lovelace" \
     --tx-out-datum-hash $newDatumHash \
     --tx-out-datum-embed-file $newDatumFile \
     --tx-out "$buyerAddr + 3000000 lovelace $extraOutput" \
     --change-address $buyerAddr \
     --protocol-params-file scripts/$BLOCKCHAIN_PREFIX/protocol-parameters.json \
+    --mint "$mintValue" \
+    --mint-script-file $bidMinterFile \
+    --mint-redeemer-file $bidMinterRedeemer \
     --invalid-before $startSlot\
     --invalid-hereafter $nextTenSlots \
     --out-file $bodyFile

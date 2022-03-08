@@ -102,7 +102,7 @@ mkPolicy action BidScriptContext
           [(sym, _, c)]
             -> sym == theCurrencySymbol
             && c < 0
-          _ -> False
+          _ -> TRACE_ERROR("Must burn this policy")
   A_Mint ->
 
     let
