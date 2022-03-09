@@ -185,7 +185,7 @@ $ scripts/wait/until-next-block.sh
 You can now view the token at the smart contract address:
 
 ```bash
-$ scripts/query/sc.sh
+$ scripts/query/auction.sh
 ```
 
 Make sure that the `~/$BLOCKCHAIN_PREFIX/seller.addr` has over 11 Ada.
@@ -199,7 +199,7 @@ $ scripts/happy-path/bid-1-tx.sh
 Wait for the next slot, and query the script address
 
 ```bash
-$ scripts/query/sc.sh
+$ scripts/query/auction.sh
 ```
 
 It should show the additional 10 Ada bid is now stored there.
@@ -215,7 +215,7 @@ $ scripts/happy-path/bid-2-tx.sh
 Wait for the next slot, and query the script address
 
 ```bash
-$ scripts/query/sc.sh
+$ scripts/query/auction.sh
 ```
 
 This should show the new bid's Ada.

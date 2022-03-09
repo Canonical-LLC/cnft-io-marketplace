@@ -25,8 +25,6 @@ import           PlutusTx.AssocMap (Map)
 import           Canonical.Shared
 import           Canonical.BidMinter
 
-#define DEBUG
-
 #if defined(DEBUG)
 #define TRACE_IF_FALSE(a,b) traceIfFalse a b
 #define TRACE_ERROR(a) traceError a
@@ -35,6 +33,14 @@ import           Canonical.BidMinter
 #define TRACE_IF_FALSE(a,b) b
 #define TRACE_ERROR(a) error ()
 #define DataConstraint(a) UnsafeFromData a
+#endif
+
+#define DEBUG_CLOSE
+
+#if defined(DEBUG) || defined(DEBUG_CLOSE)
+#define TRACE_IF_FALSE_CLOSE(a, b) traceIfFalse a b
+#else
+#define TRACE_IF_FALSE_CLOSE(a, b) b
 #endif
 
 type BidEscrowLockerInput = EscrowLockerInput BidData
@@ -259,7 +265,7 @@ sortPercents = mergeSort . A.toList
 payoutPerAddress :: Integer -> [(PubKeyHash, Percent)] -> [(PubKeyHash, Lovelaces)]
 payoutPerAddress total percents = go total 1000 percents where
   go left totalPercent = \case
-    [] -> traceError "No seller percentage specified"
+    [] -> TRACE_ERROR("No seller percentage specified")
     [(pkh, _)] -> [(pkh, left)]
     (pkh, percent) : rest ->
       let !percentOfPot = applyPercent totalPercent left percent
@@ -351,7 +357,7 @@ getScriptValue theInputs theValidator =
 
     input = case filter isScriptInput theInputs of
       [i] -> i
-      _ -> traceError "expected exactly one script input"
+      _ -> TRACE_ERROR("expected exactly one script input")
 
   in atxOutValue . atxInInfoResolved $ input
 
@@ -445,7 +451,7 @@ mkValidator auction@Auction {..} action AuctionScriptContext
     correctInputValue = actualScriptValue `geq` expectedScriptValue
 
   -- Always perform the input check
-  in traceIfFalse "wrong input value" correctInputValue
+  in TRACE_IF_FALSE("wrong input value", correctInputValue)
   && case action of
     CollectBids ->
       let
@@ -501,7 +507,7 @@ mkValidator auction@Auction {..} action AuctionScriptContext
         -- Clean up with better utilities
         (ownOutput, outputDatum) = case getContinuingOutputs' atxInfoData thisValidator atxInfoOutputs of
           [(x, y)] -> (y, x)
-          _ -> traceError "expected exactly one continuing output"
+          _ -> TRACE_ERROR("expected exactly one continuing output")
 
         -- Make sure we are setting the next datum correctly
         -- Everything should be the same, but we should
@@ -523,14 +529,14 @@ mkValidator auction@Auction {..} action AuctionScriptContext
         correctBidOutputValue =
           atxOutValue ownOutput `geq` (actualScriptValue <> Ada.lovelaceValueOf bidDiff)
 
-      in traceIfFalse "bid too low"        (sufficientBid $ bidAmount theBid)
-      && traceIfFalse "wrong output datum" (correctBidOutputDatum theBid)
-      && traceIfFalse "wrong output value" correctBidOutputValue
-      && traceIfFalse "All bids but the highest were not returned" allLowerBidsReturnedToOwners
-      && traceIfFalse "Some bids do not have enough ada" ensureBidsHaveEnoughAda
-      && traceIfFalse "Some bids are for a different auction" bidsAreForTheRightAuction
-      && traceIfFalse "Has incorrect scripts" hasValidatorScripts
-      && traceIfFalse "Missing bid token" hasBidToken
+      in TRACE_IF_FALSE("bid too low"                               , (sufficientBid $ bidAmount theBid))
+      && TRACE_IF_FALSE("wrong output datum"                        , (correctBidOutputDatum theBid))
+      && TRACE_IF_FALSE("wrong output value"                        , correctBidOutputValue)
+      && TRACE_IF_FALSE("All bids but the highest were not returned", allLowerBidsReturnedToOwners)
+      && TRACE_IF_FALSE("Some bids do not have enough ada"          , ensureBidsHaveEnoughAda)
+      && TRACE_IF_FALSE("Some bids are for a different auction"     , bidsAreForTheRightAuction)
+      && TRACE_IF_FALSE("Has incorrect scripts"                     , hasValidatorScripts)
+      && TRACE_IF_FALSE("Missing bid token"                         , hasBidToken)
 
     Close ->
       let
@@ -539,19 +545,19 @@ mkValidator auction@Auction {..} action AuctionScriptContext
         correctCloseSlotRange :: Bool
         correctCloseSlotRange = aBatcherDeadline `before` atxInfoValidRange
 
-      in traceIfFalse "too early" correctCloseSlotRange
+      in TRACE_IF_FALSE_CLOSE("too early", correctCloseSlotRange)
       && case aHighBid of
           Nothing
-            -> traceIfFalse
-                "expected seller to get token"
-                (getsValue aSeller aValue)
+            -> TRACE_IF_FALSE_CLOSE(
+                "expected seller to get token",
+                (getsValue aSeller aValue))
           Just Bid{..}
-            -> traceIfFalse
-                "expected highest bidder to get token"
-                (getsValue bidBidder aValue)
-            && traceIfFalse
-                "expected all sellers to get highest bid"
-                (payoutIsValid bidAmount atxInfoOutputs aPayoutPercentages)
+            -> TRACE_IF_FALSE_CLOSE(
+                "expected highest bidder to get token",
+                (getsValue bidBidder aValue))
+            && TRACE_IF_FALSE_CLOSE(
+                "expected all sellers to get highest bid",
+                (payoutIsValid bidAmount atxInfoOutputs aPayoutPercentages))
 
 -------------------------------------------------------------------------------
 -- Boilerplate

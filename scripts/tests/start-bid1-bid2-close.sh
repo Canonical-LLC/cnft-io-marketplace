@@ -59,7 +59,7 @@ $baseDir/happy-path/collect-2-tx.sh
 
 endTime=$(date +%s)
 elapsedTime=$(($endTime-$startTime))
-sleepTime=$((555 - $elapsedTime))
+sleepTime=$((675 - $elapsedTime))
 sleep $sleepTime
 
 echo Close with Wrong Payout Fails

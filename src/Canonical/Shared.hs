@@ -5,8 +5,6 @@ import           PlutusTx
 import           Ledger
 import           Plutus.V1.Ledger.Credential
 
-#define DEBUG
-
 #if defined(DEBUG)
 #define TRACE_IF_FALSE(a,b) traceIfFalse a b
 #define TRACE_ERROR(a) traceError a
@@ -49,6 +47,7 @@ extractDatum datums dh = go datums where
       else
         go xs
 
+{-# INLINABLE extractData #-}
 extractData :: forall a. DataConstraint(a) => [(DatumHash, Datum)] -> DatumHash -> a
 extractData ds dh =
   let

@@ -17,8 +17,6 @@ import           Canonical.Shared
 import qualified PlutusTx.AssocMap as M
 import           Ledger.Value
 
-#define DEBUG
-
 #if defined(DEBUG)
 #define TRACE_IF_FALSE(a,b) traceIfFalse a b
 #define TRACE_ERROR(a) traceError a

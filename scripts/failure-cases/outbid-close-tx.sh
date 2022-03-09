@@ -42,8 +42,8 @@ oldAmount=10000000
 
 
 
-closeScriptUtxo=$(scripts/query/sc.sh | grep $closeDatumHash | grep $value | head -n 1 | cardano-cli-balance-fixer parse-as-utxo)
-bidScriptUtxo=$(scripts/query/sc.sh | grep $oldDatumHash | grep $value | head -n 1 | cardano-cli-balance-fixer parse-as-utxo)
+closeScriptUtxo=$(scripts/query/auction.sh | grep $closeDatumHash | grep $value | head -n 1 | cardano-cli-balance-fixer parse-as-utxo)
+bidScriptUtxo=$(scripts/query/auction.sh | grep $oldDatumHash | grep $value | head -n 1 | cardano-cli-balance-fixer parse-as-utxo)
 
 currentSlot=$(cardano-cli query tip $BLOCKCHAIN | jq .slot)
 startSlot=$(($currentSlot-1))

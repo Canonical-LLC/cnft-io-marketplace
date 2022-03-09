@@ -27,8 +27,8 @@ scriptHash=$(cat $baseDir/$BLOCKCHAIN_PREFIX/auction.addr)
 bodyFile=temp/bid-tx-body.01
 outFile=temp/bid-tx.01
 
-utxoScript0=$(scripts/query/sc.sh | grep $oldDatumHash0 | grep $value | head -n 1 | cardano-cli-balance-fixer parse-as-utxo)
-utxoScript1=$(scripts/query/sc.sh | grep $oldDatumHash1 | grep $value | tail -n 1 | cardano-cli-balance-fixer parse-as-utxo)
+utxoScript0=$(scripts/query/auction.sh | grep $oldDatumHash0 | grep $value | head -n 1 | cardano-cli-balance-fixer parse-as-utxo)
+utxoScript1=$(scripts/query/auction.sh | grep $oldDatumHash1 | grep $value | tail -n 1 | cardano-cli-balance-fixer parse-as-utxo)
 currentSlot=$(cardano-cli query tip $BLOCKCHAIN | jq .slot)
 startSlot=$(($currentSlot-1))
 nextTenSlots=$(($currentSlot+150))
