@@ -429,14 +429,14 @@ mkValidator auction@Auction {..} action AuctionScriptContext
         escrowValidatorAsTokenName = case aEscrowValidator of
           ValidatorHash vh -> TokenName vh
 
-        hasBidToken :: Value -> Bool
-        hasBidToken (Value v) = case M.lookup aBidMinterPolicyId v of
+        bidTokenCount :: Value -> Integer
+        bidTokenCount (Value v) = case M.lookup aBidMinterPolicyId v of
           Nothing -> False
           Just m -> case M.toList m of
             [(tn, c)]
-              | c == 1 -> tn == escrowValidatorAsTokenName
-              | otherwise -> False
-            _ -> False
+              | tn == escrowValidatorAsTokenName -> c
+              | otherwise -> 0
+            _ -> 0
 
         validBid :: Bid -> Value -> Value -> Bool
         validBid Bid {..} expectedValue utxoValue =
@@ -446,15 +446,15 @@ mkValidator auction@Auction {..} action AuctionScriptContext
 
           in TRACE_IF_FALSE("Some bid is for a different auction", bidIsForTheRightAuction)
           && TRACE_IF_FALSE("Bid does not have enough ada"       , bidHasEnoughAda)
-          && TRACE_IF_FALSE("Missing bid token"                  , hasBidToken utxoValue)
+          && TRACE_IF_FALSE("Missing bid token"                  , bidTokenCount utxoValue == 1)
 
         -- Get the bids from the datum
         escrowBids :: [Bid]
         allBids :: Bool
         (allBids, escrowBids) = case convertInputs' atxInfoInputs atxInfoData aEscrowValidator of
           [] -> TRACE_ERROR("Missing bid inputs")
-          xs -> foldr
-            (\(x, y) (oldB, bs) ->
+          xs -> foldl
+            (\(oldB, bs) (x, y) ->
               let
                 currentBid = (convertEscrowInputToBid aDeadline x)
                 newB = validBid theBid (bdValue (eliData x)) y && oldB
@@ -465,8 +465,7 @@ mkValidator auction@Auction {..} action AuctionScriptContext
 
         allBidTokensAreBurned :: Bool
         allBidTokensAreBurned
-          =  valueOf atxInfoMint aBidMinterPolicyId escrowValidatorAsTokenName
-          == length escrowBids
+          =  bidTokenCount atxInfoMint == length escrowBids
 
         currentHighestBidder :: [Bid]
         currentHighestBidder = case aHighBid of
