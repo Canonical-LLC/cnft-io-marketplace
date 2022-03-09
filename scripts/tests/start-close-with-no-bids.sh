@@ -14,7 +14,7 @@ $baseDir/accounts/log-all-accounts.sh $bn 0
 
 echo Start Auction
 $baseDir/happy-path/lock-tx.sh 1 0
-sleep 2
+sleep 120
 $baseDir/wait/until-next-block.sh
 
 $baseDir/accounts/log-all-accounts.sh $bn 1

@@ -16,14 +16,11 @@ import           Cardano.Api.Shelley (PlutusScript (..), PlutusScriptV1)
 import           Canonical.Shared
 import qualified PlutusTx.AssocMap as M
 import           Ledger.Value
+#include "DebugUtilities.h"
 
-#if defined(DEBUG)
-#define TRACE_IF_FALSE(a,b) traceIfFalse a b
-#define TRACE_ERROR(a) traceError a
-#else
-#define TRACE_IF_FALSE(a,b) b
-#define TRACE_ERROR(a) error ()
-#endif
+-------------------------------------------------------------------------------
+-- Custom ScriptContext types to improvement transaction size and memory usage
+-------------------------------------------------------------------------------
 
 data EscrowAddress = EscrowAddress
   { eAddressCredential        :: Credential
@@ -59,6 +56,10 @@ data EscrowTxInfo = EscrowTxInfo
   , etxInfoId                 :: BuiltinData
   }
 
+-------------------------------------------------------------------------------
+-- Input Types
+-------------------------------------------------------------------------------
+
 data EscrowLockerInput a = EscrowLockerInput
   { eliOwner              :: PubKeyHash
   , eliData               :: a
@@ -70,6 +71,9 @@ data EscrowUnlockerAction
   = Cancel
   | Unlock
 
+-------------------------------------------------------------------------------
+-- Boilerplate
+-------------------------------------------------------------------------------
 makeIsDataIndexed ''EscrowAddress [('EscrowAddress,0)]
 makeIsDataIndexed ''EscrowTxOut [('EscrowTxOut,0)]
 makeIsDataIndexed ''EscrowTxInInfo [('EscrowTxInInfo,0)]
@@ -78,6 +82,9 @@ makeIsDataIndexed ''EscrowTxInfo [('EscrowTxInfo,0)]
 makeIsDataIndexed ''EscrowLockerInput [('EscrowLockerInput,0)]
 makeIsDataIndexed ''EscrowUnlockerAction [('Cancel,0), ('Unlock, 1)]
 
+-------------------------------------------------------------------------------
+-- Validator
+-------------------------------------------------------------------------------
 validateEscrow
   :: EscrowLockerInput BuiltinData
   -> EscrowUnlockerAction

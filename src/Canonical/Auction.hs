@@ -24,27 +24,11 @@ import qualified PlutusTx.AssocMap as M
 import           PlutusTx.AssocMap (Map)
 import           Canonical.Shared
 import           Canonical.BidMinter
+#include "DebugUtilities.h"
 
-#if defined(DEBUG)
-#define TRACE_IF_FALSE(a,b) traceIfFalse a b
-#define TRACE_ERROR(a) traceError a
-#define DataConstraint(a) FromData a
-#else
-#define TRACE_IF_FALSE(a,b) b
-#define TRACE_ERROR(a) error ()
-#define DataConstraint(a) UnsafeFromData a
-#endif
-
-#define DEBUG_CLOSE
-
-#if defined(DEBUG) || defined(DEBUG_CLOSE)
-#define TRACE_IF_FALSE_CLOSE(a, b) traceIfFalse a b
-#else
-#define TRACE_IF_FALSE_CLOSE(a, b) b
-#endif
-
-type BidEscrowLockerInput = EscrowLockerInput BidData
-
+-------------------------------------------------------------------------------
+-- Custom ScriptContext types to improvement transaction size and memory usage
+-------------------------------------------------------------------------------
 data AuctionAddress = AuctionAddress
   { aaddressCredential        :: Credential
   , aaddressStakingCredential :: BuiltinData
@@ -65,7 +49,7 @@ data AuctionTxInfo = AuctionTxInfo
   { atxInfoInputs             :: [AuctionTxInInfo]
   , atxInfoOutputs            :: [AuctionTxOut]
   , atxInfoFee                :: BuiltinData
-  , atxInfoMint               :: BuiltinData
+  , atxInfoMint               :: Value
   , atxInfoDCert              :: BuiltinData
   , atxInfoWdrl               :: BuiltinData
   , atxInfoValidRange         :: POSIXTimeRange
@@ -81,13 +65,6 @@ data AuctionScriptContext = AuctionScriptContext
   { aScriptContextTxInfo  :: AuctionTxInfo
   , aScriptContextPurpose :: AuctionScriptPurpose
   }
-
-makeIsDataIndexed ''AuctionScriptPurpose [('ASpending,1)]
-unstableMakeIsData ''AuctionTxInfo
-unstableMakeIsData ''AuctionScriptContext
-unstableMakeIsData ''AuctionAddress
-unstableMakeIsData ''AuctionTxOut
-unstableMakeIsData ''AuctionTxInInfo
 
 ownHash' :: [AuctionTxInInfo] -> TxOutRef -> ValidatorHash
 ownHash' ins txOutRef = go ins where
@@ -106,11 +83,11 @@ valuePaidTo' outs pkh = mconcat (pubKeyOutputsAt' pkh outs)
 
 pubKeyOutputsAt' :: PubKeyHash -> [AuctionTxOut] -> [Value]
 pubKeyOutputsAt' pk outs =
-    let flt AuctionTxOut{ atxOutAddress = AuctionAddress (PubKeyCredential pk') _, atxOutValue } | pk == pk' = Just atxOutValue
-                                                                                     | otherwise = Nothing
+    let flt AuctionTxOut{ atxOutAddress = AuctionAddress (PubKeyCredential pk') _, atxOutValue }
+          | pk == pk' = Just atxOutValue
+          | otherwise = Nothing
         flt _                     = Nothing
     in mapMaybe flt outs
-
 
 getContinuingOutputs'
   :: DataConstraint(a)
@@ -159,10 +136,11 @@ convertInputs' ins datums vh = go [] ins  where
             Nothing -> TRACE_ERROR("Script input missing datum hash")
         else
           go acc xs
--------------------------------------------------------------------------------
--- Types
--------------------------------------------------------------------------------
 
+-------------------------------------------------------------------------------
+-- Input Types
+-------------------------------------------------------------------------------
+type BidEscrowLockerInput = EscrowLockerInput BidData
 
 data Auction = Auction
   { aSeller            :: PubKeyHash
@@ -176,15 +154,11 @@ data Auction = Auction
   , aBidMinterPolicyId :: CurrencySymbol
   }
 
-
-
 data Action = CollectBids | Close
 
 -------------------------------------------------------------------------------
 -- Boilerplate
 -------------------------------------------------------------------------------
-
-
 instance Eq Auction where
   {-# INLINABLE (==) #-}
   x == y
@@ -198,10 +172,14 @@ instance Eq Auction where
     && (aValue             x == aValue             y)
     && (aBidMinterPolicyId x == aBidMinterPolicyId y)
 
-
-PlutusTx.unstableMakeIsData ''Auction
-PlutusTx.unstableMakeIsData ''Action
-
+makeIsDataIndexed  ''AuctionScriptPurpose [('ASpending,1)]
+unstableMakeIsData ''AuctionTxInfo
+unstableMakeIsData ''AuctionScriptContext
+unstableMakeIsData ''AuctionAddress
+unstableMakeIsData ''AuctionTxOut
+unstableMakeIsData ''AuctionTxInInfo
+unstableMakeIsData ''Auction
+unstableMakeIsData ''Action
 
 -------------------------------------------------------------------------------
 -- Sorting Utilities
@@ -396,10 +374,7 @@ convertEscrowInputToBid deadline EscrowLockerInput {..} =
   else
     TRACE_ERROR("bid expired")
 
-bidHasEnoughAda :: (Bid, Value, Value) -> Bool
-bidHasEnoughAda (Bid{..}, _, v)
-  =  valueOf v Ada.adaSymbol Ada.adaToken
-  >= bidAmount
+
 {-
 This is an auction validator. It is configured with an asset, reserve price,
 seller, and expiration.
@@ -414,11 +389,6 @@ and the bid Ada is split to the addresses in the 'aPayoutPercentages'.
 The payout amounts are determined by the percentages in the
 'aPayoutPercentages' map.
 -}
--- !!!!!!
--- !!!!!!
--- !!!!!! TODO must ensure all the bid tokens are burned!
--- !!!!!!
--- !!!!!!
 {-# INLINABLE mkValidator #-}
 mkValidator :: Auction -> Action -> AuctionScriptContext -> Bool
 mkValidator auction@Auction {..} action AuctionScriptContext
@@ -455,33 +425,48 @@ mkValidator auction@Auction {..} action AuctionScriptContext
   && case action of
     CollectBids ->
       let
+        escrowValidatorAsTokenName :: TokenName
+        escrowValidatorAsTokenName = case aEscrowValidator of
+          ValidatorHash vh -> TokenName vh
+
+        hasBidToken :: Value -> Bool
+        hasBidToken (Value v) = case M.lookup aBidMinterPolicyId v of
+          Nothing -> False
+          Just m -> case M.toList m of
+            [(tn, c)]
+              | c == 1 -> tn == escrowValidatorAsTokenName
+              | otherwise -> False
+            _ -> False
+
+        validBid :: Bid -> Value -> Value -> Bool
+        validBid Bid {..} expectedValue utxoValue =
+          let
+            bidIsForTheRightAuction = expectedValue `geq` aValue
+            bidHasEnoughAda = valueOf utxoValue Ada.adaSymbol Ada.adaToken >= bidAmount
+
+          in TRACE_IF_FALSE("Some bid is for a different auction", bidIsForTheRightAuction)
+          && TRACE_IF_FALSE("Bid does not have enough ada"       , bidHasEnoughAda)
+          && TRACE_IF_FALSE("Missing bid token"                  , hasBidToken utxoValue)
+
         -- Get the bids from the datum
-        escrowBidsAndValues :: [(Bid, Value, Value)]
-        escrowBidsAndValues = case convertInputs' atxInfoInputs atxInfoData aEscrowValidator of
-          [] -> TRACE_ERROR("Missing bid inputs")
-          xs -> map (\(x, y) -> (convertEscrowInputToBid aDeadline x, bdValue (eliData x), y)) xs
-
-        hasBidToken :: Bool
-        hasBidToken =
-          all (\(_, _, Value v) -> case M.lookup aBidMinterPolicyId v of
-                  Nothing -> False
-                  Just m -> case M.toList m of
-                    [(TokenName tn, c)]
-                      | c == 1 -> ValidatorHash tn == aEscrowValidator
-                      | otherwise -> False
-                    _ -> False
-              )
-              escrowBidsAndValues
-
-        bidsAreForTheRightAuction :: Bool
-        bidsAreForTheRightAuction =
-          all (`geq` aValue) (map (\(_, v, _) -> v) escrowBidsAndValues)
-
-        ensureBidsHaveEnoughAda :: Bool
-        ensureBidsHaveEnoughAda = all bidHasEnoughAda escrowBidsAndValues
-
         escrowBids :: [Bid]
-        escrowBids = map (\(x, _, _) -> x) escrowBidsAndValues
+        allBids :: Bool
+        (allBids, escrowBids) = case convertInputs' atxInfoInputs atxInfoData aEscrowValidator of
+          [] -> TRACE_ERROR("Missing bid inputs")
+          xs -> foldr
+            (\(x, y) (oldB, bs) ->
+              let
+                currentBid = (convertEscrowInputToBid aDeadline x)
+                newB = validBid theBid (bdValue (eliData x)) y && oldB
+              in (newB, currentBid : bs)
+            )
+            (True, [])
+            xs
+
+        allBidTokensAreBurned :: Bool
+        allBidTokensAreBurned
+          =  valueOf atxInfoMint aBidMinterPolicyId escrowValidatorAsTokenName
+          == length escrowBids
 
         currentHighestBidder :: [Bid]
         currentHighestBidder = case aHighBid of
@@ -533,10 +518,9 @@ mkValidator auction@Auction {..} action AuctionScriptContext
       && TRACE_IF_FALSE("wrong output datum"                        , (correctBidOutputDatum theBid))
       && TRACE_IF_FALSE("wrong output value"                        , correctBidOutputValue)
       && TRACE_IF_FALSE("All bids but the highest were not returned", allLowerBidsReturnedToOwners)
-      && TRACE_IF_FALSE("Some bids do not have enough ada"          , ensureBidsHaveEnoughAda)
-      && TRACE_IF_FALSE("Some bids are for a different auction"     , bidsAreForTheRightAuction)
       && TRACE_IF_FALSE("Has incorrect scripts"                     , hasValidatorScripts)
-      && TRACE_IF_FALSE("Missing bid token"                         , hasBidToken)
+      && TRACE_IF_FALSE("Not all bid tokens are burned"             , allBidTokensAreBurned)
+      && allBids
 
     Close ->
       let

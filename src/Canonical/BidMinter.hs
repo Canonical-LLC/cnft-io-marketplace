@@ -23,30 +23,11 @@ import           Plutus.V1.Ledger.Credential
 import           Canonical.Escrow
 import           Canonical.Shared
 import qualified PlutusTx.AssocMap as M
+#include "DebugUtilities.h"
 
-
-#if defined(DEBUG)
-#define TRACE_IF_FALSE(a,b) traceIfFalse a b
-#define TRACE_ERROR(a) traceError a
-#else
-#define TRACE_IF_FALSE(a,b) b
-#define TRACE_ERROR(a) error ()
-#endif
-
-data Action = A_Mint | A_Burn
-
-PlutusTx.unstableMakeIsData ''Action
-
-data BidData = BidData
-  { bdBid            :: Integer
-  , bdValue          :: Value
-  , bdValidStartTime :: POSIXTime
-  , bdValidEndTime   :: POSIXTime
-  , bdExpiration     :: POSIXTime
-  }
-
-PlutusTx.unstableMakeIsData ''BidData
-
+-------------------------------------------------------------------------------
+-- Custom ScriptContext types to improvement transaction size and memory usage
+-------------------------------------------------------------------------------
 data BidAddress = BidAddress
   { baddressCredential        :: Credential
   , baddressStakingCredential :: BuiltinData
@@ -79,12 +60,6 @@ data BidScriptContext = BidScriptContext
   , bScriptContextPurpose :: BidScriptPurpose
   }
 
-PlutusTx.unstableMakeIsData ''BidAddress
-PlutusTx.unstableMakeIsData ''BidTxOut
-PlutusTx.unstableMakeIsData ''BidTxInfo
-PlutusTx.unstableMakeIsData ''BidScriptPurpose
-PlutusTx.unstableMakeIsData ''BidScriptContext
-
 convertOutput
   :: UnsafeFromData a
   => [(DatumHash, Datum)]
@@ -95,13 +70,41 @@ convertOutput datums BidTxOut {btxOutDatumHash = Just dh, btxOutValue} = case fi
   Nothing -> TRACE_ERROR("Could not find the datum")
 convertOutput _ _ = TRACE_ERROR("Output is missing a datum hash")
 
+-------------------------------------------------------------------------------
+-- Input Types
+-------------------------------------------------------------------------------
+data Action = A_Mint | A_Burn
+
+data BidData = BidData
+  { bdBid            :: Integer
+  , bdValue          :: Value
+  , bdValidStartTime :: POSIXTime
+  , bdValidEndTime   :: POSIXTime
+  , bdExpiration     :: POSIXTime
+  }
+
+-------------------------------------------------------------------------------
+-- Boilerplate
+-------------------------------------------------------------------------------
+
+unstableMakeIsData ''Action
+unstableMakeIsData ''BidData
+
+unstableMakeIsData ''BidAddress
+unstableMakeIsData ''BidTxOut
+unstableMakeIsData ''BidTxInfo
+unstableMakeIsData ''BidScriptPurpose
+unstableMakeIsData ''BidScriptContext
+
+-------------------------------------------------------------------------------
+-- Validator
+-------------------------------------------------------------------------------
+
 lovelaces :: Value -> Integer
 lovelaces = getLovelace . fromValue
 
 hasSingleToken :: Value -> CurrencySymbol -> TokenName -> Bool
 hasSingleToken v c t = valueOf v c t == 1
-
-
 
 mkPolicy :: Action -> BidScriptContext -> Bool
 mkPolicy action BidScriptContext
