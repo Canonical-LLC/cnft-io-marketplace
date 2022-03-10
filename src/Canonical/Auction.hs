@@ -131,7 +131,6 @@ convertInputs' ins datums vh = go [] ins  where
             Nothing -> TRACE_ERROR("Script input missing datum hash")
         else
           go acc xs
-
 -------------------------------------------------------------------------------
 -- Input Types
 -------------------------------------------------------------------------------
@@ -362,10 +361,6 @@ mkValidator auction@Auction {..} action AuctionScriptContext
   , aScriptContextPurpose = ASpending thisOutRef
   } =
   let
-    -- Helper to make sure the pkh is paid at least the
-    getsValue :: PubKeyHash -> Value -> Bool
-    getsValue h v = valuePaidTo' atxInfoOutputs h `geq` v
-
     -- The value we expect on the script input based on
     -- datum.
     expectedScriptValue :: Value
@@ -407,7 +402,7 @@ mkValidator auction@Auction {..} action AuctionScriptContext
         validBid :: Bid -> Value -> Value -> Bool
         validBid Bid {..} expectedValue utxoValue =
           let
-            bidIsForTheRightAuction = expectedValue `geq` aValue
+            bidIsForTheRightAuction = aValue `geq` expectedValue
             bidHasEnoughAda = lovelaces utxoValue >= bidAmount
             bidCountIsOne = bidTokenCount utxoValue == 1
 
@@ -432,7 +427,8 @@ mkValidator auction@Auction {..} action AuctionScriptContext
                 (newTheBid, returns) = case mCurrentHighest of
                       Nothing -> (Just currentBid, bs)
                       Just !currentHighest
-                        | bidAmount currentHighest > bidAmount currentBid -> (Just currentHighest, currentBid:bs)
+                        | bidAmount currentHighest > bidAmount currentBid
+                          -> (Just currentHighest, currentBid:bs)
                         | otherwise -> (Just currentBid, currentHighest:bs)
               in  ( newB
                   , c+1
@@ -503,6 +499,10 @@ mkValidator auction@Auction {..} action AuctionScriptContext
         -- range. The deadline is past.
         correctCloseSlotRange :: Bool
         correctCloseSlotRange = aBatcherDeadline `before` atxInfoValidRange
+
+        -- Helper to make sure the pkh is paid at least the
+        getsValue :: PubKeyHash -> Value -> Bool
+        getsValue h v = valuePaidTo' atxInfoOutputs h `geq` v
 
       in TRACE_IF_FALSE_CLOSE("too early", correctCloseSlotRange)
       && case aHighBid of
