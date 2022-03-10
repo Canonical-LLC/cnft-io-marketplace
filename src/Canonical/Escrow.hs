@@ -18,6 +18,10 @@ import qualified PlutusTx.AssocMap as M
 import           Ledger.Value
 #include "DebugUtilities.h"
 
+-------------------------------------------------------------------------------
+-- Custom Script
+-------------------------------------------------------------------------------
+
 data EscrowAddress = EscrowAddress
   { eAddressCredential        :: Credential
   , eAddressStakingCredential :: BuiltinData
@@ -51,6 +55,10 @@ data EscrowTxInfo = EscrowTxInfo
   , etxInfoData               :: BuiltinData
   , etxInfoId                 :: BuiltinData
   }
+
+-------------------------------------------------------------------------------
+-- Input Types
+-------------------------------------------------------------------------------
 
 data EscrowLockerInput a = EscrowLockerInput
   { eliOwner              :: PubKeyHash
