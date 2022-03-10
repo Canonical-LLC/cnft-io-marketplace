@@ -16,14 +16,13 @@ import           Ledger
 import qualified Ledger.Typed.Scripts as Scripts
 import           PlutusTx
 import           PlutusTx.Prelude
-import qualified Ledger.Ada as Ada
-import qualified PlutusTx.AssocMap as A
 import           Ledger.Value
 import           Plutus.V1.Ledger.Credential
 import qualified PlutusTx.AssocMap as M
 import           PlutusTx.AssocMap (Map)
 import           Canonical.Shared
 import           Canonical.BidMinter
+import qualified Ledger.Ada as A
 #include "DebugUtilities.h"
 
 -------------------------------------------------------------------------------
@@ -90,29 +89,25 @@ pubKeyOutputsAt' pk outs =
     in mapMaybe flt outs
 
 getContinuingOutputs'
-  :: DataConstraint(a)
-  => [(DatumHash, Datum)]
+  :: [(DatumHash, Datum)]
   -> ValidatorHash
   -> [AuctionTxOut]
-  -> [(a, AuctionTxOut)]
-getContinuingOutputs' datums vh outs =
-  map
-    (\txout@AuctionTxOut {..} -> case atxOutDatumHash of
-          Just dh -> (extractData datums dh, txout)
+  -> [(Auction, Value)]
+getContinuingOutputs' datums vh outs = go [] outs where
+  go acc = \case
+    [] -> acc
+    AuctionTxOut {..} : xs
+      | aaddressCredential atxOutAddress == ScriptCredential vh ->
+        case atxOutDatumHash of
+          Just dh -> go ((extractData datums dh, atxOutValue):acc) xs
           Nothing -> TRACE_ERROR("Missing Datum Hash")
-    )
-    (filter
-      (\AuctionTxOut {..} -> aaddressCredential atxOutAddress
-        == ScriptCredential vh)
-      outs
-    )
+      | otherwise -> go acc xs
 
 convertInputs'
-  :: UnsafeFromData a
-  => [AuctionTxInInfo]
+  :: [AuctionTxInInfo]
   -> [(DatumHash, Datum)]
   -> ValidatorHash
-  -> [(a, Value)]
+  -> [(BidEscrowLockerInput, Value)]
 convertInputs' ins datums vh = go [] ins  where
   go acc = \case
     [] -> acc
@@ -147,7 +142,7 @@ data Auction = Auction
   , aDeadline          :: POSIXTime
   , aBatcherDeadline   :: POSIXTime
   , aMinBid            :: Integer
-  , aPayoutPercentages :: (A.Map PubKeyHash Integer)
+  , aPayoutPercentages :: (M.Map PubKeyHash Integer)
   , aHighBid           :: (Maybe Bid)
   , aEscrowValidator   :: ValidatorHash
   , aValue             :: Value
@@ -184,14 +179,12 @@ unstableMakeIsData ''Action
 -------------------------------------------------------------------------------
 -- Sorting Utilities
 -------------------------------------------------------------------------------
-{-# INLINABLE drop #-}
 drop :: Integer -> [a] -> [a]
 drop n l@(_:xs) =
     if n <= 0 then l
     else drop (n-1) xs
 drop _ [] = []
 
-{-# INLINABLE merge #-}
 merge :: [(PubKeyHash, Integer)] -> [(PubKeyHash, Integer)] -> [(PubKeyHash, Integer)]
 merge as@(a:as') bs@(b:bs') =
     if snd a <= snd b
@@ -200,7 +193,6 @@ merge as@(a:as') bs@(b:bs') =
 merge [] bs = bs
 merge as [] = as
 
-{-# INLINABLE mergeSort #-}
 mergeSort :: [(PubKeyHash, Integer)] -> [(PubKeyHash, Integer)]
 mergeSort xs =
     let n = length xs
@@ -215,17 +207,21 @@ mergeSort xs =
 type Percent = Integer
 type Lovelaces = Integer
 
-lovelaces :: Value -> Lovelaces
-lovelaces = Ada.getLovelace . Ada.fromValue
 
 lovelacesPaidTo :: [AuctionTxOut] -> PubKeyHash -> Integer
-lovelacesPaidTo info pkh = lovelaces (valuePaidTo' info pkh)
+lovelacesPaidTo info pkh = go 0 info where
+  go c = \case
+    [] -> c
+    AuctionTxOut{atxOutAddress = AuctionAddress (PubKeyCredential pkh') _, ..}:xs
+     | pkh == pkh' -> go (lovelaces atxOutValue + c) xs
+     | otherwise   -> go c xs
+    _ : xs -> go c xs
 
 minAda :: Lovelaces
 minAda = 1_000_000
 
-sortPercents :: A.Map PubKeyHash Percent -> [(PubKeyHash, Percent)]
-sortPercents = mergeSort . A.toList
+sortPercents :: M.Map PubKeyHash Percent -> [(PubKeyHash, Percent)]
+sortPercents = mergeSort . M.toList
 
 -- This computes the payout by attempting to the honor the percentage while
 -- keeping the payout above 1 Ada. Because 1 Ada could be higher than the
@@ -239,7 +235,6 @@ sortPercents = mergeSort . A.toList
 -- This function assumes the input is sorted by percent from least to
 -- greatest.
 --
-{-# INLINABLE payoutPerAddress #-}
 payoutPerAddress :: Integer -> [(PubKeyHash, Percent)] -> [(PubKeyHash, Lovelaces)]
 payoutPerAddress total percents = go total 1000 percents where
   go left totalPercent = \case
@@ -250,26 +245,23 @@ payoutPerAddress total percents = go total 1000 percents where
           !percentOf = max minAda percentOfPot
       in (pkh, percentOf) : go (left - percentOf) (totalPercent - percent) rest
 
-{-# INLINABLE applyPercent #-}
 applyPercent :: Integer -> Lovelaces -> Percent -> Lovelaces
 applyPercent divider inVal pct = (inVal * pct) `divide` divider
 
 -- Sort the payout map from least to greatest.
 -- Compute the payouts for each address.
 -- Check that each address has received their payout.
-{-# INLINABLE payoutIsValid #-}
-payoutIsValid :: Lovelaces -> [AuctionTxOut] -> A.Map PubKeyHash Percent -> Bool
+payoutIsValid :: Lovelaces -> [AuctionTxOut] -> M.Map PubKeyHash Percent -> Bool
 payoutIsValid total info
-  = all (paidapplyPercent info)
+  = all (paidApplyPercent info)
   . payoutPerAddress total
   . sortPercents
 
 -- For a given address and percentage pair, verify
 -- they received greater or equal to their percentage
 -- of the input.
-{-# INLINABLE paidapplyPercent #-}
-paidapplyPercent :: [AuctionTxOut] -> (PubKeyHash, Lovelaces) -> Bool
-paidapplyPercent info (addr, owed)
+paidApplyPercent :: [AuctionTxOut] -> (PubKeyHash, Lovelaces) -> Bool
+paidApplyPercent info (addr, owed)
   = lovelacesPaidTo info addr >= owed
 
 -------------------------------------------------------------------------------
@@ -298,7 +290,7 @@ isScriptCredential = \case
   ScriptCredential _ -> True
   _ -> False
 
-expectedScripts :: [AuctionTxInInfo] -> ValidatorHash -> ValidatorHash -> Bool
+expectedScripts :: [AuctionTxInInfo] -> ValidatorHash -> ValidatorHash -> Maybe Value
 expectedScripts theInputs auctionValidator escrowValidator =
   let
     auctionCredential :: Credential
@@ -307,62 +299,37 @@ expectedScripts theInputs auctionValidator escrowValidator =
     escrowCredential :: Credential
     escrowCredential = ScriptCredential escrowValidator
 
-    inputCredentials :: [Credential]
-    inputCredentials =
-      filter isScriptCredential
-        (map (aaddressCredential . atxOutAddress . atxInInfoResolved) theInputs)
+    go mValue = \case
+      []   -> mValue
+      AuctionTxInInfo { atxInInfoResolved = AuctionTxOut {atxOutAddress = AuctionAddress {..}, ..}}:xs ->
+        if aaddressCredential == auctionCredential then
+          case mValue of
+            Nothing -> go (Just atxOutValue) xs
+            Just _ -> TRACE_ERROR("More than one auction input")
+        else if aaddressCredential == escrowCredential then
+          go mValue xs
+        else if isScriptCredential aaddressCredential then
+          TRACE_ERROR("bad script input")
+        else
+          go mValue xs
 
-    onlyAuctionOrEscrow :: Bool
-    onlyAuctionOrEscrow =
-      all (\x -> auctionCredential == x || escrowCredential == x) inputCredentials
+    in go Nothing theInputs
 
-    onlyOneAuctionScript :: Bool
-    onlyOneAuctionScript =
-      length (filter (== auctionCredential) inputCredentials) == 1
-
-  in TRACE_IF_FALSE("Has own of this auctionValidator", onlyOneAuctionScript)
-  && TRACE_IF_FALSE("Invalid script inputs", onlyAuctionOrEscrow)
-
--- Verify that there is only one script input and get it's Value.
-getScriptValue :: [AuctionTxInInfo] -> ValidatorHash -> Value
-getScriptValue theInputs theValidator =
-  let
-    theCredential :: Credential
-    theCredential = ScriptCredential theValidator
-
-    isScriptInput :: AuctionTxInInfo -> Bool
-    isScriptInput = (theCredential ==) . aaddressCredential . atxOutAddress . atxInInfoResolved
-
-    input = case filter isScriptInput theInputs of
-      [i] -> i
-      _ -> TRACE_ERROR("expected exactly one script input")
-
-  in atxOutValue . atxInInfoResolved $ input
 
 -------------------------------------------------------------------------------
 -- Validator
 -------------------------------------------------------------------------------
 mergeBids :: [Bid] -> Map PubKeyHash Integer
 mergeBids
-  = foldr
-      (\Bid {..} acc
+  = foldl
+      (\ !acc Bid {..}
         -> M.unionWith (+) (M.singleton bidBidder bidAmount) acc
       )
       M.empty
 
 bidIsPaid :: [AuctionTxOut] -> (PubKeyHash, Integer) -> Bool
 bidIsPaid theOutputs (theUser, amount)
-  = valueOf (valuePaidTo' theOutputs theUser) Ada.adaSymbol Ada.adaToken
-  >= amount
-
-partitionBids :: [Bid] -> (Bid, [Bid])
-partitionBids (x:xs) = go x [] xs where
-  go highest prev = \case
-    [] -> (highest, prev)
-    y:ys
-      | bidAmount y > bidAmount highest -> go y (highest:prev) ys
-      | otherwise   -> go highest (y:prev) ys
-partitionBids _ = TRACE_ERROR("expected non-empty bids")
+  = lovelacesPaidTo theOutputs theUser >= amount
 
 convertEscrowInputToBid :: POSIXTime -> BidEscrowLockerInput -> Bid
 convertEscrowInputToBid deadline EscrowLockerInput {..} =
@@ -389,7 +356,6 @@ and the bid Ada is split to the addresses in the 'aPayoutPercentages'.
 The payout amounts are determined by the percentages in the
 'aPayoutPercentages' map.
 -}
-{-# INLINABLE mkValidator #-}
 mkValidator :: Auction -> Action -> AuctionScriptContext -> Bool
 mkValidator auction@Auction {..} action AuctionScriptContext
   { aScriptContextTxInfo = AuctionTxInfo {..}
@@ -405,16 +371,16 @@ mkValidator auction@Auction {..} action AuctionScriptContext
     expectedScriptValue :: Value
     expectedScriptValue = case aHighBid of
       Nothing -> aValue
-      Just Bid{..} -> aValue <> Ada.lovelaceValueOf bidAmount
+      Just Bid{..} -> aValue <> A.lovelaceValueOf bidAmount
 
     thisValidator :: ValidatorHash
     thisValidator = ownHash' atxInfoInputs thisOutRef
 
-    hasValidatorScripts :: Bool
-    hasValidatorScripts = expectedScripts atxInfoInputs thisValidator aEscrowValidator
-
     actualScriptValue :: Value
-    actualScriptValue = getScriptValue atxInfoInputs thisValidator
+    actualScriptValue = case expectedScripts atxInfoInputs thisValidator aEscrowValidator of
+      Nothing -> TRACE_ERROR("Wrong input scripts")
+      Just x -> x
+
     -- Ensure the value is on the script address and there is
     -- only one script input.
     correctInputValue :: Bool
@@ -431,7 +397,7 @@ mkValidator auction@Auction {..} action AuctionScriptContext
 
         bidTokenCount :: Value -> Integer
         bidTokenCount (Value v) = case M.lookup aBidMinterPolicyId v of
-          Nothing -> False
+          Nothing -> 0
           Just m -> case M.toList m of
             [(tn, c)]
               | tn == escrowValidatorAsTokenName -> c
@@ -442,38 +408,49 @@ mkValidator auction@Auction {..} action AuctionScriptContext
         validBid Bid {..} expectedValue utxoValue =
           let
             bidIsForTheRightAuction = expectedValue `geq` aValue
-            bidHasEnoughAda = valueOf utxoValue Ada.adaSymbol Ada.adaToken >= bidAmount
+            bidHasEnoughAda = lovelaces utxoValue >= bidAmount
+            bidCountIsOne = bidTokenCount utxoValue == 1
 
           in TRACE_IF_FALSE("Some bid is for a different auction", bidIsForTheRightAuction)
           && TRACE_IF_FALSE("Bid does not have enough ada"       , bidHasEnoughAda)
-          && TRACE_IF_FALSE("Missing bid token"                  , bidTokenCount utxoValue == 1)
+          && TRACE_IF_FALSE("Missing bid token"                  , bidCountIsOne)
 
         -- Get the bids from the datum
-        escrowBids :: [Bid]
+        toReturn :: [Bid]
+        mTheBid :: Maybe Bid
         allBids :: Bool
-        (allBids, escrowBids) = case convertInputs' atxInfoInputs atxInfoData aEscrowValidator of
+        bidCount :: Integer
+
+        -- We need to combine multiple traversals into one to reduce the memory usage.
+        (allBids, !bidCount, !mTheBid, toReturn) = case convertInputs' atxInfoInputs atxInfoData aEscrowValidator of
           [] -> TRACE_ERROR("Missing bid inputs")
           xs -> foldl
-            (\(oldB, bs) (x, y) ->
+            (\(!oldB, !c, !mCurrentHighest, bs) (x, y) ->
               let
                 currentBid = (convertEscrowInputToBid aDeadline x)
                 newB = validBid theBid (bdValue (eliData x)) y && oldB
-              in (newB, currentBid : bs)
+                (newTheBid, returns) = case mCurrentHighest of
+                      Nothing -> (Just currentBid, bs)
+                      Just !currentHighest
+                        | bidAmount currentHighest > bidAmount currentBid -> (Just currentHighest, currentBid:bs)
+                        | otherwise -> (Just currentBid, currentHighest:bs)
+              in  ( newB
+                  , c+1
+                  , newTheBid
+                  , returns
+                  )
             )
-            (True, [])
+            (True, 0, aHighBid, [])
             xs
+
+        theBid :: Bid
+        theBid = case mTheBid of
+          Just x -> x
+          _ -> TRACE_ERROR("No bids")
 
         allBidTokensAreBurned :: Bool
         allBidTokensAreBurned
-          =  bidTokenCount atxInfoMint == length escrowBids
-
-        currentHighestBidder :: [Bid]
-        currentHighestBidder = case aHighBid of
-          Nothing -> []
-          Just x  -> [x]
-
-        -- We need to return the expired bids
-        (theBid, toReturn) = partitionBids (currentHighestBidder <> escrowBids)
+          = bidTokenCount atxInfoMint == negate bidCount
 
         allLowerBidsReturnedToOwners :: Bool
         allLowerBidsReturnedToOwners = all (bidIsPaid atxInfoOutputs) (M.toList (mergeBids toReturn))
@@ -485,12 +462,12 @@ mkValidator auction@Auction {..} action AuctionScriptContext
             Nothing -> aMinBid
             Just Bid{..} -> bidAmount + 1
 
-        ownOutput   :: AuctionTxOut
+        ownOutput   :: Value
         outputDatum :: Auction
 
         -- Clean up with better utilities
-        (ownOutput, outputDatum) = case getContinuingOutputs' atxInfoData thisValidator atxInfoOutputs of
-          [(x, y)] -> (y, x)
+        (outputDatum, ownOutput) = case getContinuingOutputs' atxInfoData thisValidator atxInfoOutputs of
+          [(x, y)] -> (x, y)
           _ -> TRACE_ERROR("expected exactly one continuing output")
 
         -- Make sure we are setting the next datum correctly
@@ -511,13 +488,12 @@ mkValidator auction@Auction {..} action AuctionScriptContext
         -- The new value on the script should be the aValue
         correctBidOutputValue :: Bool
         correctBidOutputValue =
-          atxOutValue ownOutput `geq` (actualScriptValue <> Ada.lovelaceValueOf bidDiff)
+          ownOutput `geq` (actualScriptValue <> A.lovelaceValueOf bidDiff)
 
       in TRACE_IF_FALSE("bid too low"                               , (sufficientBid $ bidAmount theBid))
       && TRACE_IF_FALSE("wrong output datum"                        , (correctBidOutputDatum theBid))
       && TRACE_IF_FALSE("wrong output value"                        , correctBidOutputValue)
       && TRACE_IF_FALSE("All bids but the highest were not returned", allLowerBidsReturnedToOwners)
-      && TRACE_IF_FALSE("Has incorrect scripts"                     , hasValidatorScripts)
       && TRACE_IF_FALSE("Not all bid tokens are burned"             , allBidTokensAreBurned)
       && allBids
 
