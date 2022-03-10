@@ -34,7 +34,6 @@ data BidData = BidData
   , bdValue          :: Value
   , bdValidStartTime :: POSIXTime
   , bdValidEndTime   :: POSIXTime
-  , bdExpiration     :: POSIXTime
   }
 
 PlutusTx.unstableMakeIsData ''BidData

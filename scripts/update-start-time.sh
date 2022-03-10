@@ -520,9 +520,6 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/escrow-bid-1.json
         },
         {
           "int": $endValidTime
-        },
-        {
-          "int": $batcherEndTime
         }
       ]
     },
@@ -578,9 +575,6 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/escrow-reserve-not-met.j
         },
         {
           "int": $endValidTime
-        },
-        {
-          "int": $batcherEndTime
         }
       ]
     },
@@ -637,9 +631,6 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/escrow-bid-2.json
         },
         {
           "int": $endValidTime
-        },
-        {
-          "int": $batcherEndTime
         }
       ]
     },
@@ -695,9 +686,6 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/escrow-bid-3.json
         },
         {
           "int": $endValidTime
-        },
-        {
-          "int": $batcherEndTime
         }
       ]
     },
