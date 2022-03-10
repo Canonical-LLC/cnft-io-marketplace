@@ -24,24 +24,7 @@ import qualified PlutusTx.AssocMap as M
 import           PlutusTx.AssocMap (Map)
 import           Canonical.Shared
 import           Canonical.BidMinter
-
-#if defined(DEBUG)
-#define TRACE_IF_FALSE(a,b) traceIfFalse a b
-#define TRACE_ERROR(a) traceError a
-#define DataConstraint(a) FromData a
-#else
-#define TRACE_IF_FALSE(a,b) b
-#define TRACE_ERROR(a) error ()
-#define DataConstraint(a) UnsafeFromData a
-#endif
-
-#define DEBUG_CLOSE
-
-#if defined(DEBUG) || defined(DEBUG_CLOSE)
-#define TRACE_IF_FALSE_CLOSE(a, b) traceIfFalse a b
-#else
-#define TRACE_IF_FALSE_CLOSE(a, b) b
-#endif
+#include "DebugUtilities.h"
 
 type BidEscrowLockerInput = EscrowLockerInput BidData
 
@@ -82,12 +65,6 @@ data AuctionScriptContext = AuctionScriptContext
   , aScriptContextPurpose :: AuctionScriptPurpose
   }
 
-makeIsDataIndexed ''AuctionScriptPurpose [('ASpending,1)]
-unstableMakeIsData ''AuctionTxInfo
-unstableMakeIsData ''AuctionScriptContext
-unstableMakeIsData ''AuctionAddress
-unstableMakeIsData ''AuctionTxOut
-unstableMakeIsData ''AuctionTxInInfo
 
 ownHash' :: [AuctionTxInInfo] -> TxOutRef -> ValidatorHash
 ownHash' ins txOutRef = go ins where
@@ -183,8 +160,6 @@ data Action = CollectBids | Close
 -------------------------------------------------------------------------------
 -- Boilerplate
 -------------------------------------------------------------------------------
-
-
 instance Eq Auction where
   {-# INLINABLE (==) #-}
   x == y
@@ -198,10 +173,14 @@ instance Eq Auction where
     && (aValue             x == aValue             y)
     && (aBidMinterPolicyId x == aBidMinterPolicyId y)
 
-
-PlutusTx.unstableMakeIsData ''Auction
-PlutusTx.unstableMakeIsData ''Action
-
+unstableMakeIsData ''Auction
+unstableMakeIsData ''Action
+makeIsDataIndexed  ''AuctionScriptPurpose [('ASpending,1)]
+unstableMakeIsData ''AuctionTxInfo
+unstableMakeIsData ''AuctionScriptContext
+unstableMakeIsData ''AuctionAddress
+unstableMakeIsData ''AuctionTxOut
+unstableMakeIsData ''AuctionTxInInfo
 
 -------------------------------------------------------------------------------
 -- Sorting Utilities

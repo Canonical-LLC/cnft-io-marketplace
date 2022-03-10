@@ -23,15 +23,7 @@ import           Plutus.V1.Ledger.Credential
 import           Canonical.Escrow
 import           Canonical.Shared
 import qualified PlutusTx.AssocMap as M
-
-
-#if defined(DEBUG)
-#define TRACE_IF_FALSE(a,b) traceIfFalse a b
-#define TRACE_ERROR(a) traceError a
-#else
-#define TRACE_IF_FALSE(a,b) b
-#define TRACE_ERROR(a) error ()
-#endif
+#include "DebugUtilities.h"
 
 data Action = A_Mint | A_Burn
 
