@@ -65,7 +65,7 @@ data AuctionTxInfo = AuctionTxInfo
   { atxInfoInputs             :: [AuctionTxInInfo]
   , atxInfoOutputs            :: [AuctionTxOut]
   , atxInfoFee                :: BuiltinData
-  , atxInfoMint               :: BuiltinData
+  , atxInfoMint               :: Value
   , atxInfoDCert              :: BuiltinData
   , atxInfoWdrl               :: BuiltinData
   , atxInfoValidRange         :: POSIXTimeRange
@@ -261,7 +261,6 @@ sortPercents = mergeSort . A.toList
 -- This function assumes the input is sorted by percent from least to
 -- greatest.
 --
-{-# INLINABLE payoutPerAddress #-}
 payoutPerAddress :: Integer -> [(PubKeyHash, Percent)] -> [(PubKeyHash, Lovelaces)]
 payoutPerAddress total percents = go total 1000 percents where
   go left totalPercent = \case
@@ -272,26 +271,23 @@ payoutPerAddress total percents = go total 1000 percents where
           !percentOf = max minAda percentOfPot
       in (pkh, percentOf) : go (left - percentOf) (totalPercent - percent) rest
 
-{-# INLINABLE applyPercent #-}
 applyPercent :: Integer -> Lovelaces -> Percent -> Lovelaces
 applyPercent divider inVal pct = (inVal * pct) `divide` divider
 
 -- Sort the payout map from least to greatest.
 -- Compute the payouts for each address.
 -- Check that each address has received their payout.
-{-# INLINABLE payoutIsValid #-}
 payoutIsValid :: Lovelaces -> [AuctionTxOut] -> A.Map PubKeyHash Percent -> Bool
 payoutIsValid total info
-  = all (paidapplyPercent info)
+  = all (paidApplyPercent info)
   . payoutPerAddress total
   . sortPercents
 
 -- For a given address and percentage pair, verify
 -- they received greater or equal to their percentage
 -- of the input.
-{-# INLINABLE paidapplyPercent #-}
-paidapplyPercent :: [AuctionTxOut] -> (PubKeyHash, Lovelaces) -> Bool
-paidapplyPercent info (addr, owed)
+paidApplyPercent :: [AuctionTxOut] -> (PubKeyHash, Lovelaces) -> Bool
+paidApplyPercent info (addr, owed)
   = lovelacesPaidTo info addr >= owed
 
 -------------------------------------------------------------------------------
@@ -414,12 +410,6 @@ and the bid Ada is split to the addresses in the 'aPayoutPercentages'.
 The payout amounts are determined by the percentages in the
 'aPayoutPercentages' map.
 -}
--- !!!!!!
--- !!!!!!
--- !!!!!! TODO must ensure all the bid tokens are burned!
--- !!!!!!
--- !!!!!!
-{-# INLINABLE mkValidator #-}
 mkValidator :: Auction -> Action -> AuctionScriptContext -> Bool
 mkValidator auction@Auction {..} action AuctionScriptContext
   { aScriptContextTxInfo = AuctionTxInfo {..}
@@ -460,6 +450,16 @@ mkValidator auction@Auction {..} action AuctionScriptContext
         escrowBidsAndValues = case convertInputs' atxInfoInputs atxInfoData aEscrowValidator of
           [] -> TRACE_ERROR("Missing bid inputs")
           xs -> map (\(x, y) -> (convertEscrowInputToBid aDeadline x, bdValue (eliData x), y)) xs
+
+        bidTokenCount :: Integer
+        bidTokenCount =
+          case M.lookup aBidMinterPolicyId (getValue atxInfoMint) of
+            Nothing -> 0
+            Just m -> case M.toList m of
+              [(TokenName tn, c)]
+                | ValidatorHash tn == aEscrowValidator -> c
+                | otherwise -> 0
+              _ -> 0
 
         hasBidToken :: Bool
         hasBidToken =
@@ -529,6 +529,9 @@ mkValidator auction@Auction {..} action AuctionScriptContext
         correctBidOutputValue =
           atxOutValue ownOutput `geq` (actualScriptValue <> Ada.lovelaceValueOf bidDiff)
 
+        allTokensBurned :: Bool
+        allTokensBurned = negate (length escrowBids) == bidTokenCount
+
       in TRACE_IF_FALSE("bid too low"                               , (sufficientBid $ bidAmount theBid))
       && TRACE_IF_FALSE("wrong output datum"                        , (correctBidOutputDatum theBid))
       && TRACE_IF_FALSE("wrong output value"                        , correctBidOutputValue)
@@ -537,6 +540,7 @@ mkValidator auction@Auction {..} action AuctionScriptContext
       && TRACE_IF_FALSE("Some bids are for a different auction"     , bidsAreForTheRightAuction)
       && TRACE_IF_FALSE("Has incorrect scripts"                     , hasValidatorScripts)
       && TRACE_IF_FALSE("Missing bid token"                         , hasBidToken)
+      && TRACE_IF_FALSE("Not all bid tokens burned"                 , allTokensBurned)
 
     Close ->
       let
