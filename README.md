@@ -1,48 +1,61 @@
 # A NFT Auction Smart Contract
 
-This repo contains the source for a Plutus NFT auction smart contract. The source for the smart contract is located in `src/Canonical/Auction.hs`.
+This repo contains the source for three Plutus smart contracts. The contracts work together to create a high throughput NFT auction system. The source for the smart contract is located in `src`.
 
 The repo also contains an executable for compiling the smart contract in `app/Main.hs`.
 
 ## Building
-
-The compile the code to a Plutus smart contract, run:
-
-```bash
-cabal run create-auction-sc
-```
-
-This will write a file to `scripts/auction.plutus`
-
-A `shell.nix` is also providing for nix users.
-
-## Creating the Script Address
-
-After compiling the smart contract, it is necessary to make a script address.
 
 First source either the testnet or mainnet environment variables.
 
 For testnet
 
 ```
-$ source scripts/envars/testnet-env.envvars
+$ source scripts/envars/testnet-env.envars
 ```
 
 For mainnet
 
 ```
-$ source scripts/envars/mainnet-env.envvars
+$ source scripts/envars/mainnet-env.envars
 ```
 
 The environment variable files set `CARDANO_NODE_SOCKET_PATH` to the path of the appropriate Daedalus socket file (either Testnet Daedalus or the regular mainnet Daedalus). It you run a `cardano-node` on your own you should set this environment variable to your socket file location after sourcing the environment variable file.
 
+First create the wallets and get the protocol parameters.
+
+```
+$ ./scripts/wallets/make-all-wallets.sh
+$ ./scripts/query-protocol-parameters.sh
+```
+
 Next, run:
 
 ```bash
-scripts/hash-plutus.sh
+scripts/compile.sh
 ```
 
-This will make the files `testnet/auction.addr` or `mainnet/auction.addr`.
+This will make the files in `testnet/*.addr` or `mainnet/*.addr`.
+
+## Overall Design
+
+The main design goal of this auction system is to faciliate bids without contention.
+
+Bids require the creation of a bid token, which triggers the minting script. The minting script ensures the output datums is correctly storing the validity interval of the transaction. In this way we ensure bids do not occur after the auction deadline.
+
+Additionally, the minting script validates that the token name is the output address. Don't worry if this seems unusual at this point. It will make more sense what this accomplishing later.
+
+The next piece is an escrow script. This scripts allows users to cancel their bid, but they must burn there bid token.
+
+Alternatively, the bid can be spent if the auction contract is one of the inputs.
+
+In this way, the validation for unlocking is delegated to auction contract.
+
+The auction contract maintains the initial listing state setup by the seller. Additionally it tracks the highest bid and expiration.
+
+Updating the highest bid requires spending a bid token stored on the escrow contract. The auction contract ensures the bid token's name is the escrow contracts hash. If this is the case the bid token could not have left the escrow contract after minting, which means a user is unable to tamper with the datum that was stored during minting. In other words, the conditions that the bid minting contract checked and still valid.
+
+The auction contract can unlock multiple bids at once and will ensure the highest bid is reflected in the output.
 
 ## Example Transactions
 
@@ -50,20 +63,21 @@ Example transactions can be found in `scripts/core`. The scripts are used by oth
 
 ## Example Redeemers and Datums
 
-Example redeemers are found in `scripts/testnet/redeemers` and example datums are found in `scripts/datums`.
+Redeemers for all the smart contracts are found in `scripts/shared-redeemers`.
 
 Here is the Haskell type of the Datum
 
 ```haskell
 data Auction = Auction
-  { aSeller            :: !PubKeyHash
-  , aStartTime         :: !POSIXTime
-  , aDeadline          :: !POSIXTime
-  , aMinBid            :: !Integer
-  , aCurrency          :: !CurrencySymbol
-  , aToken             :: !TokenName
-  , aPayoutPercentages :: !(A.Map PubKeyHash Integer)
-  , aHighBid           :: !(Maybe Bid)
+  { aSeller            :: PubKeyHash
+  , aDeadline          :: POSIXTime
+  , aBatcherDeadline   :: POSIXTime
+  , aMinBid            :: Integer
+  , aPayoutPercentages :: (M.Map PubKeyHash Integer)
+  , aHighBid           :: (Maybe Bid)
+  , aEscrowValidator   :: ValidatorHash
+  , aValue             :: Value
+  , aBidMinterPolicyId :: CurrencySymbol
   }
 ```
 
@@ -120,6 +134,8 @@ The first time through the loop we multiple 50 * 10,000,000 and divide by 1,000 
 For the next iteration we multiple 150 * 9,000,000 and divide by 950 to get 1,421,052. This is greater than 1 Ada so we don't have to adjust it. We subtract 1,421,052 from 9,000,000 to get 7,578,947. We subtract 150 from 950 to get 800.
 
 For the final iteration through the loop we just give the user the rest which is 7,578,947.
+
+##
 
 ## Unit Tests
 

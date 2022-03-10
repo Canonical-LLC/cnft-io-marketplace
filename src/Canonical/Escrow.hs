@@ -16,14 +16,7 @@ import           Cardano.Api.Shelley (PlutusScript (..), PlutusScriptV1)
 import           Canonical.Shared
 import qualified PlutusTx.AssocMap as M
 import           Ledger.Value
-
-#if defined(DEBUG)
-#define TRACE_IF_FALSE(a,b) traceIfFalse a b
-#define TRACE_ERROR(a) traceError a
-#else
-#define TRACE_IF_FALSE(a,b) b
-#define TRACE_ERROR(a) error ()
-#endif
+#include "DebugUtilities.h"
 
 data EscrowAddress = EscrowAddress
   { eAddressCredential        :: Credential

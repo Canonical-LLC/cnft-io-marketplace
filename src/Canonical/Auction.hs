@@ -24,24 +24,7 @@ import qualified PlutusTx.AssocMap as M
 import           PlutusTx.AssocMap (Map)
 import           Canonical.Shared
 import           Canonical.BidMinter
-
-#if defined(DEBUG)
-#define TRACE_IF_FALSE(a,b) traceIfFalse a b
-#define TRACE_ERROR(a) traceError a
-#define DataConstraint(a) FromData a
-#else
-#define TRACE_IF_FALSE(a,b) b
-#define TRACE_ERROR(a) error ()
-#define DataConstraint(a) UnsafeFromData a
-#endif
-
-#define DEBUG_CLOSE
-
-#if defined(DEBUG) || defined(DEBUG_CLOSE)
-#define TRACE_IF_FALSE_CLOSE(a, b) traceIfFalse a b
-#else
-#define TRACE_IF_FALSE_CLOSE(a, b) b
-#endif
+#include "DebugUtilities.h"
 
 type BidEscrowLockerInput = EscrowLockerInput BidData
 
@@ -65,7 +48,7 @@ data AuctionTxInfo = AuctionTxInfo
   { atxInfoInputs             :: [AuctionTxInInfo]
   , atxInfoOutputs            :: [AuctionTxOut]
   , atxInfoFee                :: BuiltinData
-  , atxInfoMint               :: BuiltinData
+  , atxInfoMint               :: Value
   , atxInfoDCert              :: BuiltinData
   , atxInfoWdrl               :: BuiltinData
   , atxInfoValidRange         :: POSIXTimeRange
@@ -82,12 +65,6 @@ data AuctionScriptContext = AuctionScriptContext
   , aScriptContextPurpose :: AuctionScriptPurpose
   }
 
-makeIsDataIndexed ''AuctionScriptPurpose [('ASpending,1)]
-unstableMakeIsData ''AuctionTxInfo
-unstableMakeIsData ''AuctionScriptContext
-unstableMakeIsData ''AuctionAddress
-unstableMakeIsData ''AuctionTxOut
-unstableMakeIsData ''AuctionTxInInfo
 
 ownHash' :: [AuctionTxInInfo] -> TxOutRef -> ValidatorHash
 ownHash' ins txOutRef = go ins where
@@ -183,8 +160,6 @@ data Action = CollectBids | Close
 -------------------------------------------------------------------------------
 -- Boilerplate
 -------------------------------------------------------------------------------
-
-
 instance Eq Auction where
   {-# INLINABLE (==) #-}
   x == y
@@ -198,10 +173,14 @@ instance Eq Auction where
     && (aValue             x == aValue             y)
     && (aBidMinterPolicyId x == aBidMinterPolicyId y)
 
-
-PlutusTx.unstableMakeIsData ''Auction
-PlutusTx.unstableMakeIsData ''Action
-
+unstableMakeIsData ''Auction
+unstableMakeIsData ''Action
+makeIsDataIndexed  ''AuctionScriptPurpose [('ASpending,1)]
+unstableMakeIsData ''AuctionTxInfo
+unstableMakeIsData ''AuctionScriptContext
+unstableMakeIsData ''AuctionAddress
+unstableMakeIsData ''AuctionTxOut
+unstableMakeIsData ''AuctionTxInInfo
 
 -------------------------------------------------------------------------------
 -- Sorting Utilities
@@ -261,7 +240,6 @@ sortPercents = mergeSort . A.toList
 -- This function assumes the input is sorted by percent from least to
 -- greatest.
 --
-{-# INLINABLE payoutPerAddress #-}
 payoutPerAddress :: Integer -> [(PubKeyHash, Percent)] -> [(PubKeyHash, Lovelaces)]
 payoutPerAddress total percents = go total 1000 percents where
   go left totalPercent = \case
@@ -272,26 +250,23 @@ payoutPerAddress total percents = go total 1000 percents where
           !percentOf = max minAda percentOfPot
       in (pkh, percentOf) : go (left - percentOf) (totalPercent - percent) rest
 
-{-# INLINABLE applyPercent #-}
 applyPercent :: Integer -> Lovelaces -> Percent -> Lovelaces
 applyPercent divider inVal pct = (inVal * pct) `divide` divider
 
 -- Sort the payout map from least to greatest.
 -- Compute the payouts for each address.
 -- Check that each address has received their payout.
-{-# INLINABLE payoutIsValid #-}
 payoutIsValid :: Lovelaces -> [AuctionTxOut] -> A.Map PubKeyHash Percent -> Bool
 payoutIsValid total info
-  = all (paidapplyPercent info)
+  = all (paidApplyPercent info)
   . payoutPerAddress total
   . sortPercents
 
 -- For a given address and percentage pair, verify
 -- they received greater or equal to their percentage
 -- of the input.
-{-# INLINABLE paidapplyPercent #-}
-paidapplyPercent :: [AuctionTxOut] -> (PubKeyHash, Lovelaces) -> Bool
-paidapplyPercent info (addr, owed)
+paidApplyPercent :: [AuctionTxOut] -> (PubKeyHash, Lovelaces) -> Bool
+paidApplyPercent info (addr, owed)
   = lovelacesPaidTo info addr >= owed
 
 -------------------------------------------------------------------------------
@@ -414,12 +389,6 @@ and the bid Ada is split to the addresses in the 'aPayoutPercentages'.
 The payout amounts are determined by the percentages in the
 'aPayoutPercentages' map.
 -}
--- !!!!!!
--- !!!!!!
--- !!!!!! TODO must ensure all the bid tokens are burned!
--- !!!!!!
--- !!!!!!
-{-# INLINABLE mkValidator #-}
 mkValidator :: Auction -> Action -> AuctionScriptContext -> Bool
 mkValidator auction@Auction {..} action AuctionScriptContext
   { aScriptContextTxInfo = AuctionTxInfo {..}
@@ -460,6 +429,16 @@ mkValidator auction@Auction {..} action AuctionScriptContext
         escrowBidsAndValues = case convertInputs' atxInfoInputs atxInfoData aEscrowValidator of
           [] -> TRACE_ERROR("Missing bid inputs")
           xs -> map (\(x, y) -> (convertEscrowInputToBid aDeadline x, bdValue (eliData x), y)) xs
+
+        bidTokenCount :: Integer
+        bidTokenCount =
+          case M.lookup aBidMinterPolicyId (getValue atxInfoMint) of
+            Nothing -> 0
+            Just m -> case M.toList m of
+              [(TokenName tn, c)]
+                | ValidatorHash tn == aEscrowValidator -> c
+                | otherwise -> 0
+              _ -> 0
 
         hasBidToken :: Bool
         hasBidToken =
@@ -529,6 +508,9 @@ mkValidator auction@Auction {..} action AuctionScriptContext
         correctBidOutputValue =
           atxOutValue ownOutput `geq` (actualScriptValue <> Ada.lovelaceValueOf bidDiff)
 
+        allTokensBurned :: Bool
+        allTokensBurned = negate (length escrowBids) == bidTokenCount
+
       in TRACE_IF_FALSE("bid too low"                               , (sufficientBid $ bidAmount theBid))
       && TRACE_IF_FALSE("wrong output datum"                        , (correctBidOutputDatum theBid))
       && TRACE_IF_FALSE("wrong output value"                        , correctBidOutputValue)
@@ -537,6 +519,7 @@ mkValidator auction@Auction {..} action AuctionScriptContext
       && TRACE_IF_FALSE("Some bids are for a different auction"     , bidsAreForTheRightAuction)
       && TRACE_IF_FALSE("Has incorrect scripts"                     , hasValidatorScripts)
       && TRACE_IF_FALSE("Missing bid token"                         , hasBidToken)
+      && TRACE_IF_FALSE("Not all bid tokens burned"                 , allTokensBurned)
 
     Close ->
       let
