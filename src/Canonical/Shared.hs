@@ -4,9 +4,6 @@ import           PlutusTx.Prelude
 import           PlutusTx
 import           Ledger
 import           Plutus.V1.Ledger.Credential
-import           Ledger.Ada
-import qualified PlutusTx.AssocMap as M
-import           Ledger.Value
 #include "DebugUtilities.h"
 
 data Bid = Bid
@@ -21,24 +18,6 @@ instance Eq Bid where
     && (bidAmount x == bidAmount y)
 
 unstableMakeIsData ''Bid
-
-{-# INLINABLE lovelaces #-}
-lovelaces :: Value -> Integer
-lovelaces (Value v) = case M.lookup adaSymbol v of
-  Nothing -> 0
-  Just m -> case M.toList m of
-    [(_, c)] -> c
-    _ -> 0
-
-
-{-# INLINABLE fasterAny #-}
-fasterAny :: (a -> Bool) -> [a] -> Bool
-fasterAny f as = go as where
-  go = \case
-    [] -> False
-    x:xs
-      | f x -> True
-      | otherwise -> go xs
 
 {-# INLINABLE extractDatumBytes #-}
 extractDatumBytes :: [(DatumHash, Datum)] -> DatumHash -> BuiltinData

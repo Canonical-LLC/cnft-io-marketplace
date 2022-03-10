@@ -85,7 +85,6 @@ makeIsDataIndexed ''EscrowUnlockerAction [('Cancel,0), ('Unlock, 1)]
 -------------------------------------------------------------------------------
 -- Validator
 -------------------------------------------------------------------------------
-
 validateEscrow
   :: EscrowLockerInput BuiltinData
   -> EscrowUnlockerAction
@@ -107,10 +106,9 @@ validateEscrow
                     | M.member eliWitnessPolicyId (getValue etxOutValue) -> False
                     | otherwise -> go xs
 
-            in fasterAny (== eliOwner) etxInfoSignatories
+            in any (== eliOwner) etxInfoSignatories
             && outputDoesNotContainWitnessToken
-          Unlock -> fasterAny
-                        (\EscrowTxInInfo
+          Unlock -> any (\EscrowTxInInfo
                             { etxInInfoResolved = EscrowTxOut
                               { etxOutAddress = EscrowAddress {..}
                               }

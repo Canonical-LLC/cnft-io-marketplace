@@ -15,6 +15,7 @@ import qualified Data.ByteString.Lazy as LB
 import qualified Data.ByteString.Short as SBS
 import           Ledger
 import           Ledger.Value
+import           Ledger.Ada
 import           Ledger.Typed.Scripts
 import           PlutusTx
 import           PlutusTx.Prelude
@@ -99,25 +100,22 @@ unstableMakeIsData ''BidScriptContext
 -- Validator
 -------------------------------------------------------------------------------
 
+lovelaces :: Value -> Integer
+lovelaces = getLovelace . fromValue
 
 hasSingleToken :: Value -> CurrencySymbol -> TokenName -> Bool
-hasSingleToken (Value v) c t = case M.lookup c v of
-  Nothing -> False
-  Just m -> case M.toList m of
-    [(tn, ct)] -> tn == t && ct == 1
-    _ -> False
+hasSingleToken v c t = valueOf v c t == 1
 
 mkPolicy :: Action -> BidScriptContext -> Bool
 mkPolicy action BidScriptContext
     { bScriptContextTxInfo  = BidTxInfo {..}
     , bScriptContextPurpose = BMinting theCurrencySymbol
     } = case action of
-  A_Burn -> case btxInfoMint of
-    Value v -> case M.lookup theCurrencySymbol v of
-      Nothing -> TRACE_ERROR("No tokens to burn")
-      Just m -> case M.toList m of
-        [(_, c)] -> c < 0
-        _ -> TRACE_ERROR("Must burn this policy")
+  A_Burn -> case flattenValue btxInfoMint of
+          [(sym, _, c)]
+            -> sym == theCurrencySymbol
+            && c < 0
+          _ -> TRACE_ERROR("Must burn this policy")
   A_Mint ->
 
     let

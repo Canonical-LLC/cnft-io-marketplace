@@ -1,41 +1,48 @@
 # A NFT Auction Smart Contract
 
-This repo contains the source for three Plutus smart contracts. The contracts work together to create a high throughput NFT auction system. The source for the smart contract is located in `src`.
+This repo contains the source for a Plutus NFT auction smart contract. The source for the smart contract is located in `src/Canonical/Auction.hs`.
 
 The repo also contains an executable for compiling the smart contract in `app/Main.hs`.
 
 ## Building
+
+The compile the code to a Plutus smart contract, run:
+
+```bash
+cabal run create-auction-sc
+```
+
+This will write a file to `scripts/auction.plutus`
+
+A `shell.nix` is also providing for nix users.
+
+## Creating the Script Address
+
+After compiling the smart contract, it is necessary to make a script address.
 
 First source either the testnet or mainnet environment variables.
 
 For testnet
 
 ```
-$ source scripts/envars/testnet-env.envars
+$ source scripts/envars/testnet-env.envvars
 ```
 
 For mainnet
 
 ```
-$ source scripts/envars/mainnet-env.envars
+$ source scripts/envars/mainnet-env.envvars
 ```
 
 The environment variable files set `CARDANO_NODE_SOCKET_PATH` to the path of the appropriate Daedalus socket file (either Testnet Daedalus or the regular mainnet Daedalus). It you run a `cardano-node` on your own you should set this environment variable to your socket file location after sourcing the environment variable file.
 
-First create the wallets and get the protocol parameters.
-
-```
-$ ./scripts/wallets/make-all-wallets.sh
-$ ./scripts/query-protocol-parameters.sh
-```
-
 Next, run:
 
 ```bash
-scripts/compile.sh
+scripts/hash-plutus.sh
 ```
 
-This will make the files in `testnet/*.addr` or `mainnet/*.addr`.
+This will make the files `testnet/auction.addr` or `mainnet/auction.addr`.
 
 ## Example Transactions
 
@@ -43,21 +50,20 @@ Example transactions can be found in `scripts/core`. The scripts are used by oth
 
 ## Example Redeemers and Datums
 
-Redeemers for all the smart contracts are found in `scripts/shared-redeemers`.
+Example redeemers are found in `scripts/testnet/redeemers` and example datums are found in `scripts/datums`.
 
 Here is the Haskell type of the Datum
 
 ```haskell
 data Auction = Auction
-  { aSeller            :: PubKeyHash
-  , aDeadline          :: POSIXTime
-  , aBatcherDeadline   :: POSIXTime
-  , aMinBid            :: Integer
-  , aPayoutPercentages :: (M.Map PubKeyHash Integer)
-  , aHighBid           :: (Maybe Bid)
-  , aEscrowValidator   :: ValidatorHash
-  , aValue             :: Value
-  , aBidMinterPolicyId :: CurrencySymbol
+  { aSeller            :: !PubKeyHash
+  , aStartTime         :: !POSIXTime
+  , aDeadline          :: !POSIXTime
+  , aMinBid            :: !Integer
+  , aCurrency          :: !CurrencySymbol
+  , aToken             :: !TokenName
+  , aPayoutPercentages :: !(A.Map PubKeyHash Integer)
+  , aHighBid           :: !(Maybe Bid)
   }
 ```
 
@@ -114,8 +120,6 @@ The first time through the loop we multiple 50 * 10,000,000 and divide by 1,000 
 For the next iteration we multiple 150 * 9,000,000 and divide by 950 to get 1,421,052. This is greater than 1 Ada so we don't have to adjust it. We subtract 1,421,052 from 9,000,000 to get 7,578,947. We subtract 150 from 950 to get 800.
 
 For the final iteration through the loop we just give the user the rest which is 7,578,947.
-
-##
 
 ## Unit Tests
 
