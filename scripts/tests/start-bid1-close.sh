@@ -73,8 +73,8 @@ $baseDir/happy-path/close-tx.sh
 sleep 2
 $baseDir/wait/until-next-block.sh
 
-$baseDir/accounts/log-all-accounts.sh $bn 6
-$baseDir/accounts/diff-accounts.sh $bn 5 6
+$baseDir/accounts/log-all-accounts.sh $bn 5
+$baseDir/accounts/diff-accounts.sh $bn 4 5
 
 echo Bid on Expired Auction Fails
 detected=false
@@ -86,5 +86,5 @@ if [ $detected == false ]; then
   exit 1
 fi
 
-$baseDir/accounts/log-all-accounts.sh $bn 7
-$baseDir/accounts/diff-accounts.sh $bn 6 7
+$baseDir/accounts/log-all-accounts.sh $bn 6
+$baseDir/accounts/diff-accounts.sh $bn 5 6
