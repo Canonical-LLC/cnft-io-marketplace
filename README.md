@@ -51,11 +51,17 @@ Alternatively, the bid can be spent if the auction contract is one of the inputs
 
 In this way, the validation for unlocking is delegated to auction contract.
 
+![Bid Graphic](./images/CreateBid.png)
+
 The auction contract maintains the initial listing state setup by the seller. Additionally it tracks the highest bid and expiration.
+
+![Bid Graphic](./images/StartAuction.png)
 
 Updating the highest bid requires spending a bid token stored on the escrow contract. The auction contract ensures the bid token's name is the escrow contracts hash. If this is the case the bid token could not have left the escrow contract after minting, which means a user is unable to tamper with the datum that was stored during minting. In other words, the conditions that the bid minting contract checked and still valid.
 
 The auction contract can unlock multiple bids at once and will ensure the highest bid is reflected in the output.
+
+![Bid Graphic](./images/CollectBids.png)
 
 ## Example Transactions
 
@@ -151,14 +157,6 @@ $ cabal test
 
 Before testing you need to make sure you have `cardano-cli` installed and on your path, and it must be version 1.31.0 or greater. You will also need the json utility `jq` as well as `cardano-cli` helper `cardano-cli-balance-fixer` which can be downloaded here: https://github.com/Canonical-LLC/cardano-cli-balance-fixer
 
-## Init (only done once)
-
-First create the wallets and get the protocol parameters.
-
-```
-$ ./scripts/wallets/make-all-wallets.sh
-$ ./scripts/query-protocol-parameters.sh
-```
 
 # Manual Testing
 
@@ -212,10 +210,10 @@ Now create a bid:
 $ scripts/happy-path/bid-1-tx.sh
 ```
 
-Wait for the next slot, and query the script address
+Wait for the next slot, and query the escrow script address
 
 ```bash
-$ scripts/query/auction.sh
+$ scripts/query/escrow.sh
 ```
 
 It should show the additional 10 Ada bid is now stored there.
@@ -228,7 +226,25 @@ Now create a bid, that replaces the first bid:
 $ scripts/happy-path/bid-2-tx.sh
 ```
 
-Wait for the next slot, and query the script address
+Wait for the next slot, and query the escrow script address
+
+```bash
+$ scripts/query/escrow.sh
+```
+
+Now collect the bids
+
+```bash
+$ scripts/query/collect-2-tx.sh
+```
+
+Wait for the next slot:
+
+```bash
+$ scripts/wait/until-next-block.sh
+```
+
+Query the auction contract:
 
 ```bash
 $ scripts/query/auction.sh
