@@ -69,7 +69,7 @@ $baseDir/accounts/log-all-accounts.sh $bn 4
 $baseDir/accounts/diff-accounts.sh $bn 3 4
 
 echo Close
-$baseDir/happy-path/close-tx.sh
+$baseDir/happy-path/close-bid-1-expired-tx.sh
 sleep 2
 $baseDir/wait/until-next-block.sh
 
