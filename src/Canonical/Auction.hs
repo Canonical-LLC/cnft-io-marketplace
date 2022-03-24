@@ -358,6 +358,8 @@ partitionBids (x:xs) = go x [] xs where
     [] -> (highest, prev)
     y:ys
       | bidAmount y > bidAmount highest -> go y (highest:prev) ys
+      | bidAmount y == bidAmount highest &&
+        bidTime y < bidTime highest -> go y (highest:prev) ys
       | otherwise   -> go highest (y:prev) ys
 partitionBids _ = TRACE_ERROR("expected non-empty bids")
 
@@ -367,6 +369,7 @@ convertEscrowInputToBid deadline EscrowLockerInput {..} =
     Bid
       { bidBidder = eliOwner
       , bidAmount = bdBid eliData
+      , bidTime   = bdValidEndTime eliData
       }
   else
     TRACE_ERROR("bid expired")

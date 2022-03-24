@@ -32,7 +32,7 @@ cardano-cli transaction build \
     $(cardano-cli-balance-fixer input --address $sellerAddress $BLOCKCHAIN) \
     --tx-out "$scriptHash + $output" \
     --tx-out-datum-hash $scriptDatumHash \
-    --tx-out "$sellerAddress + 1744798 lovelace $extraOutput" \
+    --tx-out "$sellerAddress + 2689596 lovelace $extraOutput" \
     --change-address $sellerAddress \
     --protocol-params-file scripts/$BLOCKCHAIN_PREFIX/protocol-parameters.json \
     --out-file $bodyFile

@@ -46,7 +46,7 @@ cardano-cli transaction build \
     --tx-out "$scriptAddr + $output + $mintValue" \
     --tx-out-datum-hash $scriptDatumHash \
     --tx-out-datum-embed-file $scriptDatumFile \
-    --tx-out "$bidderAddress + 2137884 lovelace $extraOutput" \
+    --tx-out "$bidderAddress + 2689596 lovelace $extraOutput" \
     --change-address $bidderAddress \
     --protocol-params-file scripts/$BLOCKCHAIN_PREFIX/protocol-parameters.json \
     --mint "$mintValue" \

@@ -7,8 +7,9 @@ import           Plutus.V1.Ledger.Credential
 #include "DebugUtilities.h"
 
 data Bid = Bid
-  { bidBidder :: PubKeyHash
-  , bidAmount :: Integer
+  { bidBidder         :: PubKeyHash
+  , bidAmount         :: Integer
+  , bidTime           :: POSIXTime
   }
 
 instance Eq Bid where
@@ -16,6 +17,7 @@ instance Eq Bid where
   x == y
     =  (bidBidder x == bidBidder y)
     && (bidAmount x == bidAmount y)
+    && (bidTime   x == bidTime   y)
 
 PlutusTx.unstableMakeIsData ''Bid
 

@@ -162,6 +162,9 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/bid-1.json
             },
             {
               "int" : 10000000
+            },
+            {
+              "int": $endValidTime
             }
           ]
         }
@@ -255,6 +258,9 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/reserve-not-met-bid-1.js
             },
             {
               "int" : 7000000
+            },
+            {
+              "int": $endValidTime
             }
           ]
         }
@@ -348,6 +354,9 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/seller-bid-1.json
             },
             {
               "int" : 10000000
+            },
+            {
+              "int": $endValidTime
             }
           ]
         }
@@ -441,6 +450,9 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/bid-2.json
             },
             {
               "int" : 30000000
+            },
+            {
+              "int": $endValidTime
             }
           ]
         }
