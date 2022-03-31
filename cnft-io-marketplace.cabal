@@ -1,8 +1,8 @@
 cabal-version: 2.4
-name:          auction
-version:       1.1.0.0
+name:          cnft-io-marketplace
+version:       1.0.0.0
 license: MIT
-author:        Richard Wallace, Jonathan Fischoff, Lars Bruenjes
+author:        Richard Wallace, Jonathan Fischoff
 maintainer:    jonathan@Canonicalllc.com
 build-type:    Simple
 copyright: 2021 Canonical LLC
@@ -39,6 +39,8 @@ library
     Canonical.Escrow
     Canonical.Shared
     Canonical.BidMinter
+    Canonical.ActivityMinter
+    Canonical.ActivityTokenExchanger
   build-depends:
     , aeson
     , bytestring
@@ -55,7 +57,7 @@ library
     -fobject-code -fno-ignore-interface-pragmas
     -fno-omit-interface-pragmas -Wno-unused-packages -Wall -Werror
 
-executable create-auction-sc
+executable create-sc
   import:         lang
   hs-source-dirs: app
   main-is:        Main.hs
@@ -63,7 +65,7 @@ executable create-auction-sc
   build-depends:
     , cardano-api
     , optparse-generic
-    , auction
+    , cnft-io-marketplace
 
 test-suite tests
   import:         lang
@@ -72,7 +74,7 @@ test-suite tests
   main-is:            Main.hs
   ghc-options:        -threaded -rtsopts "-with-rtsopts=-T" -Wall -Werror
   build-depends: base
-               , auction
+               , cnft-io-marketplace
                , hspec
                , plutus-ledger-api
                , plutus-ledger

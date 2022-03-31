@@ -8,15 +8,21 @@ import Options.Generic
 import Canonical.Auction
 import Canonical.Escrow
 import Canonical.BidMinter
+import Canonical.ActivityMinter
+import Canonical.ActivityTokenExchanger
 import Prelude
 
 data Options = Options
-  { batcherOutput       :: FilePath
-  , batcherHashOutput   :: FilePath
-  , escrowOutput        :: FilePath
-  , escrowHashOutput    :: FilePath
-  , bidMinterOutput     :: FilePath
-  , bidMinterHashOutput :: FilePath
+  { batcherOutput            :: FilePath
+  , batcherHashOutput        :: FilePath
+  , escrowOutput             :: FilePath
+  , escrowHashOutput         :: FilePath
+  , bidMinterOutput          :: FilePath
+  , bidMinterHashOutput      :: FilePath
+  , exchangerOutput          :: FilePath
+  , exchangerHashOutput      :: FilePath
+  , activityMinterOutput     :: FilePath
+  , activityMinterHashOutput :: FilePath
   } deriving (Show, Generic)
 
 instance ParseRecord Options where
@@ -45,3 +51,15 @@ run Options{..} = do
     Right () -> putStrLn $ "wrote minter to file " ++ bidMinterOutput
 
   writeFile bidMinterHashOutput $ show bidPolicyId
+
+  writeFileTextEnvelope exchangerOutput Nothing exchanger >>= \case
+    Left err -> print $ displayError err
+    Right () -> putStrLn $ "wrote exchanger to file " ++ exchangerOutput
+
+  writeFile exchangerHashOutput $ show exchangerHash
+
+  writeFileTextEnvelope activityMinterOutput Nothing (activity [auctionScriptHash]) >>= \case
+    Left err -> print $ displayError err
+    Right () -> putStrLn $ "wrote activity minter to file " ++ activityMinterOutput
+
+  writeFile activityMinterHashOutput $ show $ activityPolicyId [auctionScriptHash]
