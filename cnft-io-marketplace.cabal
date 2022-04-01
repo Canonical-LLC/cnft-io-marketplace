@@ -63,6 +63,7 @@ executable create-sc
   main-is:        Main.hs
   ghc-options:    -threaded -rtsopts -with-rtsopts=-T -Wall -Werror
   build-depends:
+    , plutus-ledger
     , cardano-api
     , optparse-generic
     , cnft-io-marketplace
