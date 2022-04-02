@@ -19,7 +19,12 @@ cabal run exe:create-sc -- \
   --activity-minter-hash-output=scripts/activity-minter-hash.txt \
   --global-nft-minter-output=scripts/global-nft-minter.plutus \
   --global-nft-minter-hash-output=scripts/global-nft-minter-hash.txt \
-  --global-nft-utxo=$utxo
+  --global-nft-utxo=$utxo \
+  --rate-numerator=-1 \
+  --rate-denominator=2 \
+  --initial-amount=100 \
+  --token-name=CNFTIO \
+  --policy-id=$(cat $thisDir/test-policies/test-policy-0-id.txt)
 )
 
 $thisDir/hash-plutus.sh

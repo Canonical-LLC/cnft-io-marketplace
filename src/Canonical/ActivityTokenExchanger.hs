@@ -8,7 +8,7 @@ module Canonical.ActivityTokenExchanger
   , globalNftPolicyId
   ) where
 import           PlutusTx.Prelude
--- import           Plutus.V1.Ledger.Credential
+import           Plutus.V1.Ledger.Credential
 import           Ledger
 import           PlutusTx
 import qualified Data.ByteString.Lazy as BSL
@@ -18,7 +18,8 @@ import qualified Ledger.Typed.Scripts as Scripts
 import qualified Plutus.V1.Ledger.Scripts as Scripts
 import           Cardano.Api.Shelley (PlutusScript (..), PlutusScriptV1)
 import           Canonical.Shared
--- import qualified PlutusTx.AssocMap as M
+import qualified PlutusTx.AssocMap as M
+import           PlutusTx.AssocMap (Map)
 import           Ledger.Value
 #include "DebugUtilities.h"
 
@@ -105,6 +106,12 @@ data TokenCounter = TokenCounter
   , tcActivityPolicyId  :: CurrencySymbol
   }
 
+instance Eq TokenCounter where
+  x == y
+   =  tcCount             x == tcCount             y
+   && tcActivityTokenName x == tcActivityTokenName y
+   && tcActivityPolicyId  x == tcActivityPolicyId  y
+
 type ExchangerUnlockerAction = BuiltinData
 
 PlutusTx.unstableMakeIsData ''EscrowInput
@@ -112,19 +119,135 @@ PlutusTx.unstableMakeIsData ''TokenCounter
 PlutusTx.unstableMakeIsData ''ExchangerLockerInput
 makeLift ''ExchangerConfig
 
+convertInputsThisScriptOnly
+  :: UnsafeFromData a
+  => [TxInInfo]
+  -> [(DatumHash, Datum)]
+  -> ValidatorHash
+  -> [(a, Value)]
+convertInputsThisScriptOnly ins datums vh = go [] ins  where
+  go acc = \case
+    [] -> acc
+    TxInInfo
+      {txInInfoResolved = TxOut
+        { txOutDatumHash = mdh
+        , txOutAddress = Address {..}
+        , txOutValue
+        }
+      }:xs ->
+
+        if ScriptCredential vh == addressCredential then
+          case mdh of
+            Just dh ->
+              go  ( ( unsafeFromBuiltinData (extractDatumBytes datums dh)
+                    , txOutValue
+                    )
+                  : acc
+                  )
+                  xs
+            Nothing -> TRACE_ERROR("Script input missing datum hash")
+        else
+          TRACE_ERROR("Unexpected script input")
+
+partitionStep :: (ExchangerLockerInput, Value)
+              -> (Maybe (TokenCounter, Value), [(PubKeyHash, Value)])
+              -> (Maybe (TokenCounter, Value), [(PubKeyHash, Value)])
+partitionStep (d, v) (mcounter, xs) = case (d, mcounter) of
+  (ELI_EscrowInput EscrowInput {..}, _) -> (mcounter, (eiOwner, v) : xs)
+  (ELI_TokenCounter tc, Nothing) -> (Just (tc, v), xs)
+  _ -> TRACE_ERROR("Already found one counter datum")
+
+
+partitionInputs :: [(ExchangerLockerInput, Value)] -> ((TokenCounter, Value), [(PubKeyHash, Value)])
+partitionInputs xs = case foldr partitionStep (Nothing, []) xs of
+  (Just x, xs') -> (x, xs')
+  _ -> TRACE_ERROR("No counter datum")
+
 -- Get index on nft
 -- Get Token from nft
 -- Collect all script input datums and values
 -- assert only this type of script
--- get all of the activity tokens by user
--- convert to output token per pkh
 validateExchanger
   :: ExchangerConfig
-  -> ExchangerLockerInput
-  -> ExchangerUnlockerAction
+  -> BuiltinData
+  -> BuiltinData
   -> ScriptContext
   -> Bool
-validateExchanger = error ()
+validateExchanger ExchangerConfig {..} _ _ ctx@ScriptContext
+  { scriptContextTxInfo = info@TxInfo {..}
+  } =
+  let
+    thisValidator :: ValidatorHash
+    thisValidator = ownHash ctx
+
+    scriptInputs :: [(ExchangerLockerInput, Value)]
+    scriptInputs = convertInputsThisScriptOnly txInfoInputs txInfoData thisValidator
+
+    oldCounter :: TokenCounter
+    counterValue :: Value
+    allEscrowInputs :: [(PubKeyHash, Value)]
+
+    ((oldCounter, counterValue), allEscrowInputs) = partitionInputs scriptInputs
+
+    hasNFT :: Value -> Bool
+    hasNFT v = M.member ecGlobalCounterNft (getValue v)
+
+    hasCorrectNFTInput :: Bool
+    hasCorrectNFTInput = hasNFT counterValue
+
+    tokenConversionRate :: Integer
+    tokenConversionRate
+      = max 0
+      $ ((ecRateNumerator * tcCount oldCounter) `divide` ecRateDenominator)
+      + ecInitialAmount
+
+    outputDatum :: ExchangerLockerInput
+    outputValue :: Value
+
+    (outputDatum, outputValue) = case getContinuingOutputs ctx of
+      [TxOut { .. }] -> case txOutDatumHash of
+          Just dh -> (extractData txInfoData dh, txOutValue)
+          Nothing -> TRACE_ERROR("Missing Datum Hash")
+      _ -> TRACE_ERROR("Wrong number of continuing outputs")
+
+    hasCorrectNFTOutputValue :: Bool
+    hasCorrectNFTOutputValue = hasNFT outputValue
+
+    hasCorrectNFTOutputDatum :: Bool
+    hasCorrectNFTOutputDatum = case outputDatum of
+      ELI_EscrowInput  _ -> False
+      ELI_TokenCounter newCounter -> newCounter == oldCounter
+        { tcCount = tcCount oldCounter + 1
+        }
+
+    activityTokensOf :: Value -> Integer
+    activityTokensOf v = valueOf v (tcActivityPolicyId oldCounter) (tcActivityTokenName oldCounter)
+
+    convertActivityTokens :: Value -> Integer
+    convertActivityTokens v = activityTokensOf v * tokenConversionRate
+
+    updatePaymentMap :: (PubKeyHash, Value)
+                     -> Map PubKeyHash Integer
+                     -> Map PubKeyHash Integer
+    updatePaymentMap (pkh, v) =
+      M.unionWith (+) (M.singleton pkh (convertActivityTokens v))
+
+    allOwners :: Map PubKeyHash Integer
+    allOwners = foldr updatePaymentMap M.empty allEscrowInputs
+
+    tokensOf :: Value -> Integer
+    tokensOf v = valueOf v ecPolicyId ecTokenName
+
+    isPaidTokens :: (PubKeyHash, Integer) -> Bool
+    isPaidTokens (pkh, tokenCount) = tokensOf (valuePaidTo info pkh) > tokenCount
+
+    fundsGoToAllOwners :: Bool
+    fundsGoToAllOwners = all isPaidTokens $ M.toList allOwners
+
+  in TRACE_IF_FALSE("NFT input not correct", hasCorrectNFTInput)
+  && TRACE_IF_FALSE("NFT output not correct value", hasCorrectNFTOutputValue)
+  && TRACE_IF_FALSE("NFT output not correct datum", hasCorrectNFTOutputDatum)
+  && TRACE_IF_FALSE("Not all funds disbursed", fundsGoToAllOwners)
 
 wrapValidateExchanger
     :: ExchangerConfig

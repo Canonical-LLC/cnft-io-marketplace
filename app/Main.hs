@@ -28,6 +28,11 @@ data Options = Options
   , globalNftMinterOutput     :: FilePath
   , globalNftMinterHashOutput :: FilePath
   , globalNftUtxo             :: String
+  , rateNumerator             :: Int
+  , rateDenominator           :: Int
+  , initialAmount             :: Int
+  , tokenName                 :: String
+  , policyId                  :: String
   } deriving (Show, Generic)
 
 instance ParseRecord Options where
@@ -60,11 +65,11 @@ run Options{..} = do
   writeFile escrowHashOutput $ show globalNftPolicy
 
   let exchangerConfig = ExchangerConfig
-        { ecRateNumerator    = -1
-        , ecRateDenominator  = 2
-        , ecInitialAmount    = 100
-        , ecTokenName        = "TOKEN"
-        , ecPolicyId         = "d6cfdbedd242056674c0e51ead01785497e3a48afbbb146dc72ee1e2"
+        { ecRateNumerator    = fromIntegral rateNumerator
+        , ecRateDenominator  = fromIntegral rateDenominator
+        , ecInitialAmount    = fromIntegral initialAmount
+        , ecTokenName        = fromString tokenName
+        , ecPolicyId         = fromString policyId
         , ecGlobalCounterNft = globalNftPolicy
         }
 
