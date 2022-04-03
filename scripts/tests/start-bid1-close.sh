@@ -14,7 +14,7 @@ $baseDir/wait/until-next-block.sh
 $baseDir/accounts/log-all-accounts.sh $bn 0
 
 echo Start Auction
-$baseDir/happy-path/lock-tx.sh 400000 0
+$baseDir/happy-path/lock-tx.sh 300000 0
 
 startTime=$(date +%s)
 
@@ -51,7 +51,7 @@ $baseDir/happy-path/collect-1-tx.sh
 
 endTime=$(date +%s)
 elapsedTime=$(($endTime-$startTime))
-sleepTime=$((775 - $elapsedTime))
+sleepTime=$((330 - $elapsedTime))
 sleep $sleepTime
 
 echo Close with Wrong Payout Fails

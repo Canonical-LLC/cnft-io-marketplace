@@ -79,12 +79,6 @@ run Options{..} = do
 
   writeFile escrowHashOutput $ show escrowValidatorHash
 
-  writeFileTextEnvelope batcherOutput Nothing auctionScript >>= \case
-    Left err -> print $ displayError err
-    Right () -> putStrLn $ "wrote validator to file " ++ batcherOutput
-
-  writeFile batcherHashOutput $ show auctionScriptHash
-
   writeFileTextEnvelope bidMinterOutput Nothing bid >>= \case
     Left err -> print $ displayError err
     Right () -> putStrLn $ "wrote minter to file " ++ bidMinterOutput
@@ -95,10 +89,20 @@ run Options{..} = do
     Left err -> print $ displayError err
     Right () -> putStrLn $ "wrote exchanger to file " ++ exchangerOutput
 
-  writeFile exchangerHashOutput $ show $ exchangerHash exchangerConfig
+  let theExchangerHash = exchangerHash exchangerConfig
 
-  writeFileTextEnvelope activityMinterOutput Nothing (activity [auctionScriptHash]) >>= \case
+  writeFile exchangerHashOutput $ show theExchangerHash
+
+  writeFileTextEnvelope batcherOutput Nothing (auctionScript theExchangerHash) >>= \case
+    Left err -> print $ displayError err
+    Right () -> putStrLn $ "wrote validator to file " ++ batcherOutput
+
+  let theAuctionHash = auctionScriptHash theExchangerHash
+
+  writeFile batcherHashOutput $ show theAuctionHash
+
+  writeFileTextEnvelope activityMinterOutput Nothing (activity [theAuctionHash]) >>= \case
     Left err -> print $ displayError err
     Right () -> putStrLn $ "wrote activity minter to file " ++ activityMinterOutput
 
-  writeFile activityMinterHashOutput $ show $ activityPolicyId [auctionScriptHash]
+  writeFile activityMinterHashOutput $ show $ activityPolicyId [theAuctionHash]

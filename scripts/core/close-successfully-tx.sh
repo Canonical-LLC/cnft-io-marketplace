@@ -16,7 +16,9 @@ royaltyAmount=$9
 royaltyAddr="${10}"
 marketplaceAmount="${11}"
 marketplaceAddr="${12}"
+bidderExchangerDatum="${13}"
 
+DATUM_PREFIX=${DATUM_PREFIX:-0}
 
 nftValidatorFile=$baseDir/auction.plutus
 scriptHash=$(cat $baseDir/$BLOCKCHAIN_PREFIX/auction.addr)
@@ -37,6 +39,14 @@ if [ "$changeOutput" != "" ];then
   extraOutput="+ $changeOutput"
 fi
 
+activityToken="$(cat $baseDir/activity-minter-hash.txt).4143544956495459"
+mintValue="2 $activityToken"
+activityMinterFile=$baseDir/activity-minter.plutus
+mintActivityTokenFile=$baseDir/redeemers/mint.json
+
+exchanger=$(cat $baseDir/$BLOCKCHAIN_PREFIX/exchanger.addr)
+sellerExchangerDatum=$tempDir/$BLOCKCHAIN_PREFIX/datums/$DATUM_PREFIX/sellerExchange.json
+
 
 cardano-cli transaction build \
     --alonzo-era \
@@ -52,8 +62,15 @@ cardano-cli transaction build \
     --tx-out "$sellerAddr + $sellerAmount lovelace" \
     --tx-out "$royaltyAddr + $royaltyAmount lovelace "  \
     --tx-out "$marketplaceAddr + $marketplaceAmount lovelace $extraOutput"  \
+    --tx-out "$exchanger + 1700000 lovelace + 1 $activityToken" \
+    --tx-out-datum-embed-file $sellerExchangerDatum \
+    --tx-out "$exchanger + 1700000 lovelace + 1 $activityToken" \
+    --tx-out-datum-embed-file $bidderExchangerDatum \
     --change-address $marketplaceAddr \
     --protocol-params-file scripts/$BLOCKCHAIN_PREFIX/protocol-parameters.json \
+    --mint "$mintValue" \
+    --mint-script-file $activityMinterFile \
+    --mint-redeemer-file $mintActivityTokenFile \
     --invalid-before $startSlot\
     --invalid-hereafter $nextTenSlots \
     --out-file $bodyFile

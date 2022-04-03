@@ -1,6 +1,7 @@
 module Canonical.ActivityTokenExchanger
   ( ExchangerConfig (..)
   , EscrowInput (..)
+  , ExchangerLockerInput (..)
   , TokenCounter (..)
   , exchanger
   , exchangerHash

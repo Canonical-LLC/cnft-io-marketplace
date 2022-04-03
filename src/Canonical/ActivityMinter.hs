@@ -17,6 +17,11 @@ import           Canonical.Shared
 import qualified PlutusTx.AssocMap as M
 #include "DebugUtilities.h"
 
+data AuctionConfig = AuctionConfig
+  { acActivityPolicyId  :: CurrencySymbol
+  , acActivityTokenName :: TokenName
+  }
+
 data Action = A_Mint | A_Burn
 
 PlutusTx.unstableMakeIsData ''Action
