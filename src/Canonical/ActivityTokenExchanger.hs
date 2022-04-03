@@ -52,8 +52,6 @@ mkNftMinter theTokenName utxo _ ctx =
           Nothing -> TRACE_ERROR("Failed to convert datum")
           Just (ELI_TokenCounter TokenCounter {..})
             -> TRACE_IF_FALSE("Wager index is not zero", (tcCount == 0))
-            && TRACE_IF_FALSE("Policy id of nft is wrong", (tcActivityPolicyId == theCurrencySymbol))
-            && TRACE_IF_FALSE("Token name of nft is wrong", (tcActivityTokenName == theTokenName))
           _ -> TRACE_ERROR("Wrong type of datum")
       _ -> TRACE_ERROR("Impossible. No minted output.")
 
@@ -245,10 +243,22 @@ validateExchanger ExchangerConfig {..} _ _ ctx@ScriptContext
     fundsGoToAllOwners :: Bool
     fundsGoToAllOwners = all isPaidTokens $ M.toList allOwners
 
+    amountToBurn :: Integer
+    amountToBurn
+      = negate
+      $ sum
+      $ map snd
+      $ M.toList allOwners
+
+    allActivityTokensAreBurned :: Bool
+    allActivityTokensAreBurned
+      = activityTokensOf txInfoMint == amountToBurn
+
   in TRACE_IF_FALSE("NFT input not correct", hasCorrectNFTInput)
   && TRACE_IF_FALSE("NFT output not correct value", hasCorrectNFTOutputValue)
   && TRACE_IF_FALSE("NFT output not correct datum", hasCorrectNFTOutputDatum)
   && TRACE_IF_FALSE("Not all funds disbursed", fundsGoToAllOwners)
+  && TRACE_IF_FALSE("Burn Activity Tokens", allActivityTokensAreBurned)
 
 wrapValidateExchanger
     :: ExchangerConfig

@@ -25,6 +25,7 @@ batcherValidatorHash=$(cat $thisDir/auction-hash.txt)
 escrowValidatorHash=$(cat $thisDir/escrow-hash.txt)
 bidMinterHash=$(cat $thisDir/bid-minter-hash.txt)
 activityPolicyId=$(cat $thisDir/activity-minter-hash.txt)
+activityTokenName=494E444558
 
 cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/start.json
 {
@@ -783,6 +784,50 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/buyer1Exchange.json
       "fields": [
         {
           "bytes": "$buyer1Pkh"
+        }
+      ]
+    }
+  ]
+}
+EOF
+
+cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/index0.json
+{
+  "constructor": 1,
+  "fields": [
+    {
+      "constructor": 0,
+      "fields": [
+        {
+          "int": 0
+        },
+        {
+          "bytes": "$activityPolicyId"
+        },
+        {
+          "bytes": "$activityTokenName"
+        }
+      ]
+    }
+  ]
+}
+EOF
+
+cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/index1.json
+{
+  "constructor": 1,
+  "fields": [
+    {
+      "constructor": 0,
+      "fields": [
+        {
+          "int": 1
+        },
+        {
+          "bytes": "$activityPolicyId"
+        },
+        {
+          "bytes": "$activityTokenName"
         }
       ]
     }

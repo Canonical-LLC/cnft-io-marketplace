@@ -56,13 +56,13 @@ run Options{..} = do
 
   let theUtxo = parseUTxO globalNftUtxo
 
-  writeFileTextEnvelope escrowOutput Nothing (globalNft globalNftTokenName theUtxo) >>= \case
+  writeFileTextEnvelope globalNftMinterOutput Nothing (globalNft globalNftTokenName theUtxo) >>= \case
     Left err -> print $ displayError err
-    Right () -> putStrLn $ "wrote validator to file " ++ escrowOutput
+    Right () -> putStrLn $ "wrote validator to file " ++ globalNftMinterOutput
 
   let globalNftPolicy = globalNftPolicyId globalNftTokenName theUtxo
 
-  writeFile escrowHashOutput $ show globalNftPolicy
+  writeFile globalNftMinterHashOutput $ show globalNftPolicy
 
   let exchangerConfig = ExchangerConfig
         { ecRateNumerator    = fromIntegral rateNumerator
