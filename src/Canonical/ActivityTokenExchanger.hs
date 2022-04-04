@@ -222,17 +222,20 @@ validateExchanger ExchangerConfig {..} _ _ ctx@ScriptContext
     activityTokensOf :: Value -> Integer
     activityTokensOf v = valueOf v (tcActivityPolicyId oldCounter) (tcActivityTokenName oldCounter)
 
-    convertActivityTokens :: Value -> Integer
-    convertActivityTokens v = activityTokensOf v * tokenConversionRate
+    allEscrowActivityTokens :: [(PubKeyHash, Integer)]
+    allEscrowActivityTokens = map (\(p, x) -> (p, activityTokensOf x)) allEscrowInputs
 
-    updatePaymentMap :: (PubKeyHash, Value)
+    convertActivityTokens :: Integer -> Integer
+    convertActivityTokens v = v * tokenConversionRate
+
+    updatePaymentMap :: (PubKeyHash, Integer)
                      -> Map PubKeyHash Integer
                      -> Map PubKeyHash Integer
     updatePaymentMap (pkh, v) =
       M.unionWith (+) (M.singleton pkh (convertActivityTokens v))
 
     allOwners :: Map PubKeyHash Integer
-    allOwners = foldr updatePaymentMap M.empty allEscrowInputs
+    allOwners = foldr updatePaymentMap M.empty allEscrowActivityTokens
 
     tokensOf :: Value -> Integer
     tokensOf v = valueOf v ecPolicyId ecTokenName
@@ -247,18 +250,28 @@ validateExchanger ExchangerConfig {..} _ _ ctx@ScriptContext
     amountToBurn
       = negate
       $ sum
-      $ map snd
-      $ M.toList allOwners
+      $ map snd allEscrowActivityTokens
 
     allActivityTokensAreBurned :: Bool
     allActivityTokensAreBurned
       = activityTokensOf txInfoMint == amountToBurn
+
+    totalTokensPaid :: Integer
+    totalTokensPaid
+      = sum
+      $ map snd
+      $ M.toList allOwners
+
+    outputTokensAreCorrect :: Bool
+    outputTokensAreCorrect
+      = tokensOf counterValue - totalTokensPaid < tokensOf outputValue
 
   in TRACE_IF_FALSE("NFT input not correct", hasCorrectNFTInput)
   && TRACE_IF_FALSE("NFT output not correct value", hasCorrectNFTOutputValue)
   && TRACE_IF_FALSE("NFT output not correct datum", hasCorrectNFTOutputDatum)
   && TRACE_IF_FALSE("Not all funds disbursed", fundsGoToAllOwners)
   && TRACE_IF_FALSE("Burn Activity Tokens", allActivityTokensAreBurned)
+  && TRACE_IF_FALSE("Funds are not returned script", outputTokensAreCorrect)
 
 wrapValidateExchanger
     :: ExchangerConfig

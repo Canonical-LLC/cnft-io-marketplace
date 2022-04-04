@@ -7,11 +7,16 @@ bn=$(basename $0)
 $baseDir/wait/until-next-block.sh
 
 # echo Mint
-$baseDir/minting/mint-0-policy.sh
+$baseDir/minting/mint-0-policy-n.sh 101
 sleep 2
 $baseDir/wait/until-next-block.sh
 
 $baseDir/accounts/log-all-accounts.sh $bn 0
+
+echo Mint Index NFT
+$baseDir/compile.sh
+$baseDir/happy-path/mint-index-nft-tx.sh
+$baseDir/wait/until-next-block.sh
 
 echo Start Auction
 $baseDir/happy-path/lock-tx.sh 300000 0
@@ -88,3 +93,7 @@ fi
 
 $baseDir/accounts/log-all-accounts.sh $bn 6
 $baseDir/accounts/diff-accounts.sh $bn 5 6
+
+echo "Exchange tokens"
+$baseDir/happy-path/exchange-buyer.sh
+$baseDir/wait/until-next-block.sh

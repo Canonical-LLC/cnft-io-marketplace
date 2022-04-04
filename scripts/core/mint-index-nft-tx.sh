@@ -10,12 +10,15 @@ mkdir -p $tempDir
 $baseDir/hash-plutus.sh
 $baseDir/hash-datums.sh
 
+
+exchangedToken="$(cat $baseDir/test-policies/test-policy-0-id.txt).123456"
+
 minterAddress=$1
 signingKey=$2
 scriptDatumFile=$3
 nftPolicyId=$(cat $baseDir/global-nft-minter-hash.txt)
 mintValue="1 $nftPolicyId.494E444558"
-output="1700000 lovelace + $mintValue"
+output="2000000 lovelace + $mintValue + 100 $exchangedToken"
 scriptAddr=$(cat $baseDir/$BLOCKCHAIN_PREFIX/exchanger.addr)
 
 bodyFile=$tempDir/sell-tx-body.01
