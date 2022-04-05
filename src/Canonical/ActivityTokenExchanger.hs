@@ -169,7 +169,7 @@ convertInputsThisScriptOnly
   => [ExchangerTxInInfo]
   -> [(DatumHash, Datum)]
   -> ValidatorHash
-  -> [(a, Value)]
+  -> [(a, TxOutRef,  Value)]
 convertInputsThisScriptOnly ins datums vh = go [] ins  where
   go acc = \case
     [] -> acc
@@ -179,6 +179,7 @@ convertInputsThisScriptOnly ins datums vh = go [] ins  where
         , atxOutAddress = ExchangerAddress {..}
         , atxOutValue
         }
+      , ..
       }:xs ->
         case aaddressCredential of
           ScriptCredential vh'
@@ -186,6 +187,7 @@ convertInputsThisScriptOnly ins datums vh = go [] ins  where
               case mdh of
                 Just dh ->
                   go  ( ( unsafeFromBuiltinData (extractDatumBytes datums dh)
+                        , atxInInfoOutRef
                         , atxOutValue
                         )
                       : acc
@@ -195,15 +197,15 @@ convertInputsThisScriptOnly ins datums vh = go [] ins  where
             | otherwise -> TRACE_ERROR_EXCHANGE("Unexpected script input")
           _ -> go acc xs
 
-partitionStep :: (ExchangerLockerInput, Value)
-              -> (Maybe (TokenCounter, Value), [(PubKeyHash, Value)])
-              -> (Maybe (TokenCounter, Value), [(PubKeyHash, Value)])
-partitionStep (d, v) (mcounter, xs) = case (d, mcounter) of
+partitionStep :: (ExchangerLockerInput, TxOutRef, Value)
+              -> (Maybe (TokenCounter, TxOutRef, Value), [(PubKeyHash, Value)])
+              -> (Maybe (TokenCounter, TxOutRef, Value), [(PubKeyHash, Value)])
+partitionStep (d, ref, v) (mcounter, xs) = case (d, mcounter) of
   (ELI_EscrowInput EscrowInput {..}, _) -> (mcounter, (eiOwner, v) : xs)
-  (ELI_TokenCounter tc, Nothing) -> (Just (tc, v), xs)
+  (ELI_TokenCounter tc, Nothing) -> (Just (tc, ref, v), xs)
   _ -> TRACE_ERROR_EXCHANGE("Already found one counter datum")
 
-partitionInputs :: [(ExchangerLockerInput, Value)] -> ((TokenCounter, Value), [(PubKeyHash, Value)])
+partitionInputs :: [(ExchangerLockerInput, TxOutRef, Value)] -> ((TokenCounter, TxOutRef, Value), [(PubKeyHash, Value)])
 partitionInputs xs = case foldr partitionStep (Nothing, []) xs of
   (Just x, xs') -> (x, xs')
   _ -> TRACE_ERROR_EXCHANGE("No counter datum")
@@ -268,96 +270,100 @@ validateExchanger ExchangerConfig {..} _ _ ExchangerScriptContext
     thisValidator :: ValidatorHash
     thisValidator = ownHash' atxInfoInputs thisTxOutRef
 
-    scriptInputs :: [(ExchangerLockerInput, Value)]
+    scriptInputs :: [(ExchangerLockerInput, TxOutRef, Value)]
     scriptInputs = convertInputsThisScriptOnly atxInfoInputs atxInfoData thisValidator
 
     oldCounter :: TokenCounter
     counterValue :: Value
     allEscrowInputs :: [(PubKeyHash, Value)]
 
-    ((oldCounter, counterValue), allEscrowInputs) = partitionInputs scriptInputs
+    ((oldCounter, counterRef, counterValue), allEscrowInputs) = partitionInputs scriptInputs
 
-    hasNFT :: Value -> Bool
-    hasNFT v = M.member ecGlobalCounterNft (getValue v)
+  in if counterRef /= thisTxOutRef then
+      True
+    else
+      let
+        hasNFT :: Value -> Bool
+        hasNFT v = M.member ecGlobalCounterNft (getValue v)
 
-    hasCorrectNFTInput :: Bool
-    hasCorrectNFTInput = hasNFT counterValue
+        hasCorrectNFTInput :: Bool
+        hasCorrectNFTInput = hasNFT counterValue
 
-    tokenConversionRate :: Integer
-    tokenConversionRate
-      = max 0
-      $ ((ecRateNumerator * tcCount oldCounter) `divide` ecRateDenominator)
-      + ecInitialAmount
+        tokenConversionRate :: Integer
+        tokenConversionRate
+          = max 0
+          $ ((ecRateNumerator * tcCount oldCounter) `divide` ecRateDenominator)
+          + ecInitialAmount
 
-    outputDatum :: ExchangerLockerInput
-    outputValue :: Value
+        outputDatum :: ExchangerLockerInput
+        outputValue :: Value
 
-    (outputDatum, outputValue) = case getContinuingOutputs' atxInfoData thisValidator atxInfoOutputs of
-      [(d, ExchangerTxOut {..})] -> (d, atxOutValue)
-      _ -> TRACE_ERROR_EXCHANGE("Wrong number of continuing outputs")
+        (outputDatum, outputValue) = case getContinuingOutputs' atxInfoData thisValidator atxInfoOutputs of
+          [(d, ExchangerTxOut {..})] -> (d, atxOutValue)
+          _ -> TRACE_ERROR_EXCHANGE("Wrong number of continuing outputs")
 
-    hasCorrectNFTOutputValue :: Bool
-    hasCorrectNFTOutputValue = hasNFT outputValue
+        hasCorrectNFTOutputValue :: Bool
+        hasCorrectNFTOutputValue = hasNFT outputValue
 
-    activityTokensOf :: Value -> Integer
-    activityTokensOf v = valueOf v (tcActivityPolicyId oldCounter) (tcActivityTokenName oldCounter)
+        activityTokensOf :: Value -> Integer
+        activityTokensOf v = valueOf v (tcActivityPolicyId oldCounter) (tcActivityTokenName oldCounter)
 
-    allEscrowActivityTokens :: [(PubKeyHash, Integer)]
-    allEscrowActivityTokens = map (\(p, x) -> (p, activityTokensOf x)) allEscrowInputs
+        allEscrowActivityTokens :: [(PubKeyHash, Integer)]
+        allEscrowActivityTokens = map (\(p, x) -> (p, activityTokensOf x)) allEscrowInputs
 
-    amountToBurn :: Integer
-    amountToBurn
-      = sum
-      $ map snd allEscrowActivityTokens
+        amountToBurn :: Integer
+        amountToBurn
+          = sum
+          $ map snd allEscrowActivityTokens
 
-    hasCorrectNFTOutputDatum :: Bool
-    hasCorrectNFTOutputDatum = case outputDatum of
-      ELI_EscrowInput  _ -> False
-      ELI_TokenCounter newCounter -> newCounter == oldCounter
-        { tcCount = tcCount oldCounter + amountToBurn
-        }
+        hasCorrectNFTOutputDatum :: Bool
+        hasCorrectNFTOutputDatum = case outputDatum of
+          ELI_EscrowInput  _ -> False
+          ELI_TokenCounter newCounter -> newCounter == oldCounter
+            { tcCount = tcCount oldCounter + amountToBurn
+            }
 
-    convertActivityTokens :: Integer -> Integer
-    convertActivityTokens v = v * tokenConversionRate
+        convertActivityTokens :: Integer -> Integer
+        convertActivityTokens v = v * tokenConversionRate
 
-    updatePaymentMap :: (PubKeyHash, Integer)
-                     -> Map PubKeyHash Integer
-                     -> Map PubKeyHash Integer
-    updatePaymentMap (pkh, v) =
-      M.unionWith (+) (M.singleton pkh (convertActivityTokens v))
+        updatePaymentMap :: (PubKeyHash, Integer)
+                         -> Map PubKeyHash Integer
+                         -> Map PubKeyHash Integer
+        updatePaymentMap (pkh, v) =
+          M.unionWith (+) (M.singleton pkh (convertActivityTokens v))
 
-    allOwners :: Map PubKeyHash Integer
-    allOwners = foldr updatePaymentMap M.empty allEscrowActivityTokens
+        allOwners :: Map PubKeyHash Integer
+        allOwners = foldr updatePaymentMap M.empty allEscrowActivityTokens
 
-    tokensOf :: Value -> Integer
-    tokensOf v = valueOf v ecPolicyId ecTokenName
+        tokensOf :: Value -> Integer
+        tokensOf v = valueOf v ecPolicyId ecTokenName
 
-    isPaidTokens :: (PubKeyHash, Integer) -> Bool
-    isPaidTokens (pkh, tokenCount) = tokensOf (valuePaidTo' atxInfoOutputs pkh) >= tokenCount
+        isPaidTokens :: (PubKeyHash, Integer) -> Bool
+        isPaidTokens (pkh, tokenCount) = tokensOf (valuePaidTo' atxInfoOutputs pkh) >= tokenCount
 
-    fundsGoToAllOwners :: Bool
-    fundsGoToAllOwners = all isPaidTokens $ M.toList allOwners
+        fundsGoToAllOwners :: Bool
+        fundsGoToAllOwners = all isPaidTokens $ M.toList allOwners
 
-    allActivityTokensAreBurned :: Bool
-    allActivityTokensAreBurned
-      = activityTokensOf atxInfoMint == negate amountToBurn
+        allActivityTokensAreBurned :: Bool
+        allActivityTokensAreBurned
+          = activityTokensOf atxInfoMint == negate amountToBurn
 
-    totalTokensPaid :: Integer
-    totalTokensPaid
-      = sum
-      $ map snd
-      $ M.toList allOwners
+        totalTokensPaid :: Integer
+        totalTokensPaid
+          = sum
+          $ map snd
+          $ M.toList allOwners
 
-    outputTokensAreCorrect :: Bool
-    outputTokensAreCorrect
-      = tokensOf counterValue - totalTokensPaid <= tokensOf outputValue
+        outputTokensAreCorrect :: Bool
+        outputTokensAreCorrect
+          = tokensOf counterValue - totalTokensPaid <= tokensOf outputValue
 
-  in TRACE_IF_FALSE_EXCHANGE("NFT input not correct", hasCorrectNFTInput)
-  && TRACE_IF_FALSE_EXCHANGE("NFT output not correct value", hasCorrectNFTOutputValue)
-  && TRACE_IF_FALSE_EXCHANGE("NFT output not correct datum", hasCorrectNFTOutputDatum)
-  && TRACE_IF_FALSE_EXCHANGE("Not all funds disbursed", fundsGoToAllOwners)
-  && TRACE_IF_FALSE_EXCHANGE("Burn Activity Tokens", allActivityTokensAreBurned)
-  && TRACE_IF_FALSE_EXCHANGE("Funds are not returned script", outputTokensAreCorrect)
+      in TRACE_IF_FALSE_EXCHANGE("NFT input not correct", hasCorrectNFTInput)
+      && TRACE_IF_FALSE_EXCHANGE("NFT output not correct value", hasCorrectNFTOutputValue)
+      && TRACE_IF_FALSE_EXCHANGE("NFT output not correct datum", hasCorrectNFTOutputDatum)
+      && TRACE_IF_FALSE_EXCHANGE("Not all funds disbursed", fundsGoToAllOwners)
+      && TRACE_IF_FALSE_EXCHANGE("Burn Activity Tokens", allActivityTokensAreBurned)
+      && TRACE_IF_FALSE_EXCHANGE("Funds are not returned script", outputTokensAreCorrect)
 
 wrapValidateExchanger
     :: ExchangerConfig
