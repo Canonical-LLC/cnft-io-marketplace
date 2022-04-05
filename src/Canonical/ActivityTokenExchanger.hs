@@ -210,23 +210,35 @@ partitionInputs xs = case foldr partitionStep (Nothing, []) xs of
   (Just x, xs') -> (x, xs')
   _ -> TRACE_ERROR_EXCHANGE("No counter datum")
 
+findDatum'
+  :: PlutusTx.UnsafeFromData a
+  => [(DatumHash, Datum)]
+  -> DatumHash
+  -> a
+findDatum' info dh
+  = PlutusTx.unsafeFromBuiltinData
+    (getDatum
+     (extractDatum info dh))
+
 getContinuingOutputs'
-  :: DataConstraint(a)
+  :: PlutusTx.UnsafeFromData a
   => [(DatumHash, Datum)]
   -> ValidatorHash
   -> [ExchangerTxOut]
-  -> [(a, ExchangerTxOut)]
-getContinuingOutputs' datums vh outs =
-  map
-    (\txout@ExchangerTxOut {..} -> case atxOutDatumHash of
-          Just dh -> (extractData datums dh, txout)
-          Nothing -> TRACE_ERROR("Missing Datum Hash")
-    )
-    (filter
-      (\ExchangerTxOut {..} -> aaddressCredential atxOutAddress
-        == ScriptCredential vh)
-      outs
-    )
+  -> [(a, Value)]
+getContinuingOutputs' datums vh outs = go [] outs where
+  go acc = \case
+    [] -> acc
+    ExchangerTxOut
+      { atxOutDatumHash = Just dh
+      , atxOutAddress = ExchangerAddress
+          { aaddressCredential = ScriptCredential vh'
+          }
+      , atxOutValue
+      }:os
+        | vh == vh' -> go ((findDatum' datums dh, atxOutValue) : acc) os
+        | otherwise -> go acc os
+    _ : os -> go acc os
 
 ownHash' :: [ExchangerTxInInfo] -> TxOutRef -> ValidatorHash
 ownHash' ins txOutRef = go ins where
@@ -299,7 +311,7 @@ validateExchanger ExchangerConfig {..} _ _ ExchangerScriptContext
         outputValue :: Value
 
         (outputDatum, outputValue) = case getContinuingOutputs' atxInfoData thisValidator atxInfoOutputs of
-          [(d, ExchangerTxOut {..})] -> (d, atxOutValue)
+          [(d, v)] -> (d, v)
           _ -> TRACE_ERROR_EXCHANGE("Wrong number of continuing outputs")
 
         hasCorrectNFTOutputValue :: Bool
@@ -344,8 +356,8 @@ validateExchanger ExchangerConfig {..} _ _ ExchangerScriptContext
         fundsGoToAllOwners :: Bool
         fundsGoToAllOwners = all isPaidTokens $ M.toList allOwners
 
-        allActivityTokensAreBurned :: Bool
-        allActivityTokensAreBurned
+        _allActivityTokensAreBurned :: Bool
+        _allActivityTokensAreBurned
           = activityTokensOf atxInfoMint == negate amountToBurn
 
         totalTokensPaid :: Integer
@@ -354,16 +366,16 @@ validateExchanger ExchangerConfig {..} _ _ ExchangerScriptContext
           $ map snd
           $ M.toList allOwners
 
-        outputTokensAreCorrect :: Bool
-        outputTokensAreCorrect
+        _outputTokensAreCorrect :: Bool
+        _outputTokensAreCorrect
           = tokensOf counterValue - totalTokensPaid <= tokensOf outputValue
 
       in TRACE_IF_FALSE_EXCHANGE("NFT input not correct", hasCorrectNFTInput)
       && TRACE_IF_FALSE_EXCHANGE("NFT output not correct value", hasCorrectNFTOutputValue)
       && TRACE_IF_FALSE_EXCHANGE("NFT output not correct datum", hasCorrectNFTOutputDatum)
       && TRACE_IF_FALSE_EXCHANGE("Not all funds disbursed", fundsGoToAllOwners)
-      && TRACE_IF_FALSE_EXCHANGE("Burn Activity Tokens", allActivityTokensAreBurned)
-      && TRACE_IF_FALSE_EXCHANGE("Funds are not returned script", outputTokensAreCorrect)
+      -- && TRACE_IF_FALSE_EXCHANGE("Burn Activity Tokens", allActivityTokensAreBurned)
+      -- && TRACE_IF_FALSE_EXCHANGE("Funds are not returned script", outputTokensAreCorrect)
 
 wrapValidateExchanger
     :: ExchangerConfig
