@@ -62,9 +62,9 @@ cardano-cli transaction build \
     --tx-out "$sellerAddr + $sellerAmount lovelace" \
     --tx-out "$royaltyAddr + $royaltyAmount lovelace "  \
     --tx-out "$marketplaceAddr + $marketplaceAmount lovelace $extraOutput"  \
-    --tx-out "$exchanger + 1700000 lovelace + 1 $activityToken" \
+    --tx-out "$exchanger + 2000000 lovelace + 1 $activityToken" \
     --tx-out-datum-embed-file $sellerExchangerDatum \
-    --tx-out "$exchanger + 1700000 lovelace + 1 $activityToken" \
+    --tx-out "$exchanger + 2000000 lovelace + 1 $activityToken" \
     --tx-out-datum-embed-file $bidderExchangerDatum \
     --change-address $marketplaceAddr \
     --protocol-params-file scripts/$BLOCKCHAIN_PREFIX/protocol-parameters.json \

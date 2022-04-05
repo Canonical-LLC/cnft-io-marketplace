@@ -11,7 +11,7 @@ $baseDir/hash-plutus.sh
 $baseDir/hash-datums.sh
 
 
-exchangedToken="$(cat $baseDir/test-policies/test-policy-0-id.txt).123456"
+exchangedToken="$(cat $baseDir/test-policies/test-policy-0-id.txt).434e4654494f"
 
 minterAddress=$1
 signingKey=$2

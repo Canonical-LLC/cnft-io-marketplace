@@ -7,7 +7,9 @@ bn=$(basename $0)
 $baseDir/wait/until-next-block.sh
 
 # echo Mint
-$baseDir/minting/mint-0-policy-n.sh 101
+$baseDir/minting/mint-0-policy.sh
+$baseDir/wait/until-next-block.sh
+$baseDir/minting/mint-0-policy-n.sh 100
 sleep 2
 $baseDir/wait/until-next-block.sh
 
@@ -57,8 +59,17 @@ $baseDir/happy-path/collect-1-tx.sh
 
 endTime=$(date +%s)
 elapsedTime=$(($endTime-$startTime))
-sleepTime=$((360 - $elapsedTime))
-sleep $sleepTime
+sleepTime=$((440 - $elapsedTime))
+finalTime=$(($sleepTime+$endTime))
+currentTime=$endTime
+
+while [ $currentTime -le $finalTime ]
+do
+  timeLeft=$(($finalTime - $currentTime))
+  echo "$timeLeft left to sleep"
+  $baseDir/wait/until-next-block.sh
+  currentTime=$(date +%s)
+done
 
 echo Close with Wrong Payout Fails
 detected=false

@@ -49,6 +49,10 @@ cardano-cli transaction build \
     --alonzo-era \
     $BLOCKCHAIN \
     $(cardano-cli-balance-fixer input --address $exchangerAddr $BLOCKCHAIN ) \
+    --tx-in $indexNftUtxo \
+    --tx-in-script-file $validatorFile \
+    --tx-in-datum-file $oldNftDatum \
+    --tx-in-redeemer-value 42 \
     --tx-in $sellerUtxo \
     --tx-in-script-file $validatorFile \
     --tx-in-datum-file $sellerDatum \
@@ -57,15 +61,11 @@ cardano-cli transaction build \
     --tx-in-script-file $validatorFile \
     --tx-in-datum-file $buyerDatum \
     --tx-in-redeemer-value 42 \
-    --tx-in $indexNftUtxo \
-    --tx-in-script-file $validatorFile \
-    --tx-in-datum-file $oldNftDatum \
-    --tx-in-redeemer-value 42 \
     --required-signer $signingKey \
     --tx-in-collateral $(cardano-cli-balance-fixer collateral --address $exchangerAddr $BLOCKCHAIN) \
     --tx-out "$sellerAddr + $sellerValue" \
     --tx-out "$buyerAddr + $buyerValue" \
-    --tx-out "$scriptAddr + 1700000 lovelace + 1 $nftValue + $newOutput" \
+    --tx-out "$scriptAddr + 2000000 lovelace + 1 $nftValue + $newOutput" \
     --tx-out-datum-embed-file $newNftDatum \
     --tx-out "$exchangerAddr + 3000000 lovelace $extraOutput" \
     --change-address $exchangerAddr \

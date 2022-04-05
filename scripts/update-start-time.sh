@@ -821,7 +821,7 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/index1.json
       "constructor": 0,
       "fields": [
         {
-          "int": 1
+          "int": 2
         },
         {
           "bytes": "$activityPolicyId"
