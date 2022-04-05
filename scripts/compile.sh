@@ -22,7 +22,7 @@ cabal run exe:create-sc -- \
   --global-nft-utxo=$utxo \
   --rate-numerator=-1 \
   --rate-denominator=2 \
-  --initial-amount=100 \
+  --initial-amount=10 \
   --token-name="4V" \
   --policy-id=$(cat $thisDir/test-policies/test-policy-0-id.txt)
 )

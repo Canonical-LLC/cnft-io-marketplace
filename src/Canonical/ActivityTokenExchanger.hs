@@ -249,6 +249,7 @@ pubKeyOutputsAt' pk outs =
         flt _                     = Nothing
     in mapMaybe flt outs
 
+
 -- Get index on nft
 -- Get Token from nft
 -- Collect all script input datums and values
@@ -350,7 +351,7 @@ validateExchanger ExchangerConfig {..} _ _ ExchangerScriptContext
 
     outputTokensAreCorrect :: Bool
     outputTokensAreCorrect
-      = tokensOf counterValue - totalTokensPaid < tokensOf outputValue
+      = tokensOf counterValue - totalTokensPaid =< tokensOf outputValue
 
   in TRACE_IF_FALSE_EXCHANGE("NFT input not correct", hasCorrectNFTInput)
   && TRACE_IF_FALSE_EXCHANGE("NFT output not correct value", hasCorrectNFTOutputValue)

@@ -24,6 +24,7 @@ buyerDatum=${10}
 nftValue=${11}
 oldNftDatum=${12}
 newNftDatum=${13}
+newOutput=${14}
 
 validatorFile=$baseDir/exchanger.plutus
 scriptAddr=$(cat $baseDir/$BLOCKCHAIN_PREFIX/exchanger.addr)
@@ -64,7 +65,7 @@ cardano-cli transaction build \
     --tx-in-collateral $(cardano-cli-balance-fixer collateral --address $exchangerAddr $BLOCKCHAIN) \
     --tx-out "$sellerAddr + $sellerValue" \
     --tx-out "$buyerAddr + $buyerValue" \
-    --tx-out "$scriptAddr + 1700000 lovelace + 1 $nftValue" \
+    --tx-out "$scriptAddr + 1700000 lovelace + 1 $nftValue + $newOutput" \
     --tx-out-datum-embed-file $newNftDatum \
     --tx-out "$exchangerAddr + 3000000 lovelace $extraOutput" \
     --change-address $exchangerAddr \

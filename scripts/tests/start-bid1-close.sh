@@ -15,7 +15,7 @@ $baseDir/accounts/log-all-accounts.sh $bn 0
 
 echo Mint Index NFT
 $baseDir/compile.sh
-$baseDir/update-start-time.sh
+$baseDir/update-start-time.sh 300000
 $baseDir/happy-path/mint-index-nft-tx.sh
 $baseDir/wait/until-next-block.sh
 

@@ -1,3 +1,5 @@
+#define DEBUG_EXCHANGE
+
 
 #if defined(DEBUG)
 #define TRACE_IF_FALSE(a,b) traceIfFalse a b

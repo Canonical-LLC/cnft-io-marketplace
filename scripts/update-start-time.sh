@@ -25,7 +25,7 @@ batcherValidatorHash=$(cat $thisDir/auction-hash.txt)
 escrowValidatorHash=$(cat $thisDir/escrow-hash.txt)
 bidMinterHash=$(cat $thisDir/bid-minter-hash.txt)
 activityPolicyId=$(cat $thisDir/activity-minter-hash.txt)
-activityTokenName=494E444558
+activityTokenName=4143544956495459
 
 cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/start.json
 {

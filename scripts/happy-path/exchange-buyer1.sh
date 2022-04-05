@@ -22,4 +22,5 @@ $baseDir/core/exchange-tx.sh \
   $tempDir/$BLOCKCHAIN_PREFIX/datums/$DATUM_PREFIX/buyer1Exchange.json \
   $nftAsset \
   $tempDir/$BLOCKCHAIN_PREFIX/datums/$DATUM_PREFIX/index0.json \
-  $tempDir/$BLOCKCHAIN_PREFIX/datums/$DATUM_PREFIX/index1.json
+  $tempDir/$BLOCKCHAIN_PREFIX/datums/$DATUM_PREFIX/index1.json \
+  "80 $exchangedToken"
