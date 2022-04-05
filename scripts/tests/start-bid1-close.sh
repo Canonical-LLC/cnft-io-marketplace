@@ -15,11 +15,12 @@ $baseDir/accounts/log-all-accounts.sh $bn 0
 
 echo Mint Index NFT
 $baseDir/compile.sh
+$baseDir/update-start-time.sh
 $baseDir/happy-path/mint-index-nft-tx.sh
 $baseDir/wait/until-next-block.sh
 
 echo Start Auction
-$baseDir/happy-path/lock-tx.sh 300000 0
+$baseDir/happy-path/lock-tx.sh 300000 0 true
 
 startTime=$(date +%s)
 
@@ -56,7 +57,7 @@ $baseDir/happy-path/collect-1-tx.sh
 
 endTime=$(date +%s)
 elapsedTime=$(($endTime-$startTime))
-sleepTime=$((330 - $elapsedTime))
+sleepTime=$((360 - $elapsedTime))
 sleep $sleepTime
 
 echo Close with Wrong Payout Fails

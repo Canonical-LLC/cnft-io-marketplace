@@ -16,3 +16,11 @@
 #else
 #define TRACE_IF_FALSE_CLOSE(a, b) b
 #endif
+
+#if defined(DEBUG) || defined(DEBUG_EXCHANGE)
+#define TRACE_IF_FALSE_EXCHANGE(a, b) traceIfFalse a b
+#define TRACE_ERROR_EXCHANGE(a) traceError a
+#else
+#define TRACE_IF_FALSE_EXCHANGE(a, b) b
+#define TRACE_ERROR_EXCHANGE(a) error ()
+#endif

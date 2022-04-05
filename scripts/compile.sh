@@ -23,7 +23,7 @@ cabal run exe:create-sc -- \
   --rate-numerator=-1 \
   --rate-denominator=2 \
   --initial-amount=100 \
-  --token-name=CNFTIO \
+  --token-name="4V" \
   --policy-id=$(cat $thisDir/test-policies/test-policy-0-id.txt)
 )
 

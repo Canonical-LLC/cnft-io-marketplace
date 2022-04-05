@@ -6,7 +6,10 @@ tempDir=$baseDir/../temp
 offset=${1:-500000}
 DATUM_PREFIX=${2:-0}
 
+if [ -z "${3+xxx}" ]; then
 $baseDir/update-start-time.sh $offset $DATUM_PREFIX
+fi
+
 
 sleep 2
 
