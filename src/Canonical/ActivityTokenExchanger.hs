@@ -324,9 +324,10 @@ validateExchanger ExchangerConfig {..} _ _ ExchangerScriptContext
         allEscrowActivityTokens = map (\(p, x) -> (p, activityTokensOf x)) allEscrowInputs
 
         amountToBurn :: Integer
-        amountToBurn
-          = sum
-          $ map snd allEscrowActivityTokens
+        amountToBurn = go 0 allEscrowActivityTokens where
+          go acc = \case
+            [] -> acc
+            (_, x) : xs -> go (acc + x) xs
 
         hasCorrectNFTOutputDatum :: Bool
         hasCorrectNFTOutputDatum = case outputDatum of
@@ -351,31 +352,42 @@ validateExchanger ExchangerConfig {..} _ _ ExchangerScriptContext
         tokensOf v = valueOf v ecPolicyId ecTokenName
 
         isPaidTokens :: (PubKeyHash, Integer) -> Bool
-        isPaidTokens (pkh, tokenCount) = tokensOf (valuePaidTo' atxInfoOutputs pkh) >= tokenCount
+        isPaidTokens (pkh, tokenCount) = go 0 atxInfoOutputs >= tokenCount where
+          go acc = \case
+            [] -> acc
+            ExchangerTxOut
+              { atxOutAddress = ExchangerAddress
+                  {aaddressCredential = PubKeyCredential pkh'}
+              , ..
+              } : xs
+                | pkh' == pkh -> go (tokensOf atxOutValue + acc) xs
+                | otherwise -> go acc xs
+            _:xs -> go acc xs
+
 
         fundsGoToAllOwners :: Bool
-        fundsGoToAllOwners = all isPaidTokens $ M.toList allOwners
+        fundsGoToAllOwners = all isPaidTokens (M.toList allOwners)
 
-        _allActivityTokensAreBurned :: Bool
-        _allActivityTokensAreBurned
+        allActivityTokensAreBurned :: Bool
+        allActivityTokensAreBurned
           = activityTokensOf atxInfoMint == negate amountToBurn
 
         totalTokensPaid :: Integer
-        totalTokensPaid
-          = sum
-          $ map snd
-          $ M.toList allOwners
+        totalTokensPaid = go 0 (M.toList allOwners) where
+          go acc = \case
+            [] -> acc
+            (_, x) : xs -> go (acc + x) xs
 
-        _outputTokensAreCorrect :: Bool
-        _outputTokensAreCorrect
+        outputTokensAreCorrect :: Bool
+        outputTokensAreCorrect
           = tokensOf counterValue - totalTokensPaid <= tokensOf outputValue
 
       in TRACE_IF_FALSE_EXCHANGE("NFT input not correct", hasCorrectNFTInput)
       && TRACE_IF_FALSE_EXCHANGE("NFT output not correct value", hasCorrectNFTOutputValue)
       && TRACE_IF_FALSE_EXCHANGE("NFT output not correct datum", hasCorrectNFTOutputDatum)
       && TRACE_IF_FALSE_EXCHANGE("Not all funds disbursed", fundsGoToAllOwners)
-      -- && TRACE_IF_FALSE_EXCHANGE("Burn Activity Tokens", allActivityTokensAreBurned)
-      -- && TRACE_IF_FALSE_EXCHANGE("Funds are not returned script", outputTokensAreCorrect)
+      && TRACE_IF_FALSE_EXCHANGE("Burn Activity Tokens", allActivityTokensAreBurned)
+      && TRACE_IF_FALSE_EXCHANGE("Funds are not returned script", outputTokensAreCorrect)
 
 wrapValidateExchanger
     :: ExchangerConfig
