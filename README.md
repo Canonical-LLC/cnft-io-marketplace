@@ -323,3 +323,17 @@ $ cat temp/accounts/diffs/start-bid1-bid2-close.sh/0-1/seller.json
 This shows that the smart contract (`sc`), received a non-native token (`d6cfdbedd242056674c0e51ead01785497e3a48afbbb146dc72ee1e2.123456`) and 1758582 lovelaces.
 
 As expected, the seller lost _at least_ this much. Notice it lost more Ada, because of fees.
+
+# Activity Token Minting and Exchanging
+
+Whenever purchases are completed an activity token is minted and sent to the exchanger smart contract address.
+
+The activity tokens can be exchanged for reward tokens, by spending the exchanger UTxOs.
+
+The exchanger uses a linear formula for the distribution schedule. A counter of the number of activity tokens exchanged thus far is maintained on an UTxO with a special NFT. The schedule is a simple linear schedule where the slope and intercept can be configured at compile time. See `scripts/compile.sh` for the arguments that are used.
+
+Additionally the reward tokens must be part of the UTxO that stores the counter NFT.
+
+The example script `scripts/happy-path/exchanger.sh` shows the process of exchanging an activity token for reward token.
+
+The tests `tests/start-bid1-close.sh` executes the whole process including minting the NFT, minting the reward tokens, completing a auction purchase and collecting rewards.
