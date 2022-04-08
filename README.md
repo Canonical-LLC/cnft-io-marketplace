@@ -337,3 +337,52 @@ Additionally the reward tokens must be part of the UTxO that stores the counter 
 The example script `scripts/happy-path/exchanger.sh` shows the process of exchanging an activity token for reward token.
 
 The tests `tests/start-bid1-close.sh` executes the whole process including minting the NFT, minting the reward tokens, completing a auction purchase and collecting rewards.
+
+# Direct Sale Contract
+
+Both sellers lifting NFTs and buyers listing offers are handled by the same contract `direct-sale.plutus`, with the source file `src/Canonical/DirectSale.hs`.
+
+The input datum is given by the types:
+
+```haskell
+data Payout = Payout
+  { pAddress :: PubKeyHash
+  , pValue   :: Value
+  }
+
+data CloseInfo = CloseInfo
+  { ciTimeout         :: Maybe POSIXTime
+  -- ^ An optional timeout for expiration as an absolute
+  --   time in milliseconds
+  , ciEmergencyCloser :: Maybe PubKeyHash
+  -- ^ The emergency closer public key hash
+  , ciValue           :: Value
+  -- ^ The value listed that must be returned if closed
+  }
+
+data SwapInput = SwapInput
+  { siOwner             :: PubKeyHash
+  -- ^ Used for the signer check on Cancel
+  , siSwapPayouts       :: [Payout]
+  -- ^ Divvy up the payout to different address for Swap
+  , siCloseInfo         :: Maybe CloseInfo
+  -- ^ Optional data for closing the listing on the behalf
+  --   of the owner
+  , siActivityTokenName :: TokenName
+  -- ^ The Activity token name
+  , siActivityPolicyId  :: CurrencySymbol
+  -- ^ The Activity policy id
+  , siBoostTokenName    :: TokenName
+  -- ^ The Boost token name
+  , siBoostPolicyId     :: CurrencySymbol
+  -- ^ The Boost policy id
+  , siBoostPayoutPkh    :: PubKeyHash
+  -- ^ The Boost payout public key hash
+  }
+```
+
+and the redeemer has the type:
+
+```haskell
+data BuyerInput = Cancel | Buy [Payout] | Close | EmergencyClose
+```

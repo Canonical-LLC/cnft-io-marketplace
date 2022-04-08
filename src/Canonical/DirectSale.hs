@@ -33,8 +33,12 @@ data Payout = Payout
 
 data CloseInfo = CloseInfo
   { ciTimeout         :: Maybe POSIXTime
+  -- ^ An optional timeout for expiration as an absolute
+  --   time in milliseconds
   , ciEmergencyCloser :: Maybe PubKeyHash
+  -- ^ The emergency closer public key hash
   , ciValue           :: Value
+  -- ^ The value listed that must be returned if closed
   }
 
 data SwapInput = SwapInput
@@ -43,11 +47,18 @@ data SwapInput = SwapInput
   , siSwapPayouts       :: [Payout]
   -- ^ Divvy up the payout to different address for Swap
   , siCloseInfo         :: Maybe CloseInfo
+  -- ^ Optional data for closing the listing on the behalf
+  --   of the owner
   , siActivityTokenName :: TokenName
+  -- ^ The Activity token name
   , siActivityPolicyId  :: CurrencySymbol
+  -- ^ The Activity policy id
   , siBoostTokenName    :: TokenName
+  -- ^ The Boost token name
   , siBoostPolicyId     :: CurrencySymbol
+  -- ^ The Boost policy id
   , siBoostPayoutPkh    :: PubKeyHash
+  -- ^ The Boost payout public key hash
   }
 
 data BuyerInput = Cancel | Buy [Payout] | Close | EmergencyClose
