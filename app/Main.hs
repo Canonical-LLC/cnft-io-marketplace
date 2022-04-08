@@ -104,14 +104,16 @@ run Options{..} = do
 
   writeFile batcherHashOutput $ show theAuctionHash
 
-  writeFileTextEnvelope directSaleOutput Nothing directSale >>= \case
+  writeFileTextEnvelope directSaleOutput Nothing (directSale theExchangerHash) >>= \case
     Left err -> print $ displayError err
     Right () -> putStrLn $ "wrote validator to file " ++ directSaleOutput
 
-  writeFile directSaleHashOutput $ show directSaleHash
+  let theDirectSaleHash = directSaleHash theExchangerHash
 
-  writeFileTextEnvelope activityMinterOutput Nothing (activity [theAuctionHash, directSaleHash]) >>= \case
+  writeFile directSaleHashOutput $ show theDirectSaleHash
+
+  writeFileTextEnvelope activityMinterOutput Nothing (activity [theAuctionHash, theDirectSaleHash]) >>= \case
     Left err -> print $ displayError err
     Right () -> putStrLn $ "wrote activity minter to file " ++ activityMinterOutput
 
-  writeFile activityMinterHashOutput $ show $ activityPolicyId [theAuctionHash, directSaleHash]
+  writeFile activityMinterHashOutput $ show $ activityPolicyId [theAuctionHash, theDirectSaleHash]

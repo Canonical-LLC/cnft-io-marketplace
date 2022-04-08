@@ -19,10 +19,12 @@ import           Plutus.V1.Ledger.Value
 import           Plutus.V1.Ledger.Credential
 import           Canonical.Shared
 import qualified Plutus.V1.Ledger.Scripts as Scripts
+import           Canonical.ActivityTokenExchanger
 #include "DebugUtilities.h"
 -------------------------------------------------------------------------------
 -- Types
 -------------------------------------------------------------------------------
+
 
 data Payout = Payout
   { pAddress :: PubKeyHash
@@ -30,19 +32,25 @@ data Payout = Payout
   }
 
 data CloseInfo = CloseInfo
-  { ciTimeout :: POSIXTime
-  , ciValue   :: Value
+  { ciTimeout         :: Maybe POSIXTime
+  , ciEmergencyCloser :: Maybe PubKeyHash
+  , ciValue           :: Value
   }
 
 data SwapInput = SwapInput
-  { siOwner         :: PubKeyHash
+  { siOwner             :: PubKeyHash
   -- ^ Used for the signer check on Cancel
-  , siSwapPayouts   :: [Payout]
+  , siSwapPayouts       :: [Payout]
   -- ^ Divvy up the payout to different address for Swap
-  , siCloseInfo     :: Maybe CloseInfo
+  , siCloseInfo         :: Maybe CloseInfo
+  , siActivityTokenName :: TokenName
+  , siActivityPolicyId  :: CurrencySymbol
+  , siBoostTokenName    :: TokenName
+  , siBoostPolicyId     :: CurrencySymbol
+  , siBoostPayoutPkh    :: PubKeyHash
   }
 
-data BuyerInput = Cancel | Buy [Payout] | Close
+data BuyerInput = Cancel | Buy [Payout] | Close | EmergencyClose
 
 -------------------------------------------------------------------------------
 -- Utilities
@@ -98,9 +106,11 @@ instance Eq Payout where
 
 instance Eq SwapInput where
   x == y
-    =  siOwner       x == siOwner       y
-    && siSwapPayouts x == siSwapPayouts y
-    && siCloseInfo   x == siCloseInfo   y
+    =  siOwner               x == siOwner             y
+    && siSwapPayouts         x == siSwapPayouts       y
+    && siCloseInfo           x == siCloseInfo         y
+    && siActivityTokenName   x == siActivityTokenName y
+    && siActivityPolicyId    x == siActivityPolicyId  y
 
 instance Eq BuyerInput where
   x == y = case (x, y) of
@@ -117,6 +127,24 @@ PlutusTx.unstableMakeIsData ''BuyerInput
 -------------------------------------------------------------------------------
 -- Validation
 -------------------------------------------------------------------------------
+getContinuingOutputs'
+  :: DataConstraint(a)
+  => [(DatumHash, Datum)]
+  -> ValidatorHash
+  -> [TxOut]
+  -> [(a, Value)]
+getContinuingOutputs' datums vh outs =
+  map
+    (\TxOut {..} -> case txOutDatumHash of
+          Just dh -> (extractData datums dh, txOutValue)
+          Nothing -> TRACE_ERROR("Missing Datum Hash")
+    )
+    (filter
+      (\TxOut {..} -> addressCredential txOutAddress
+        == ScriptCredential vh)
+      outs
+    )
+
 -- check that each user is paid
 -- and the total is correct
 validateOutputConstraints :: TxInfo -> Map PubKeyHash Value -> Bool
@@ -124,11 +152,10 @@ validateOutputConstraints info constraints
   = all (\(x, y) -> paidAtleastTo info x y)
   $ M.toList constraints
 
-buyOfferValidator :: SwapInput -> BuyerInput -> ScriptContext -> Bool
-buyOfferValidator l u ctx =
+buyOfferValidator :: ValidatorHash -> SwapInput -> BuyerInput -> ScriptContext -> Bool
+buyOfferValidator theExchangerHash l u ctx =
   let
-    info :: TxInfo
-    info = scriptContextTxInfo ctx
+    info@TxInfo{..} = scriptContextTxInfo ctx
 
   -- Every branch but user initiated cancel requires checking the input
   -- to ensure there is only one script input.
@@ -138,10 +165,40 @@ buyOfferValidator l u ctx =
 
     Buy unlockerPayouts ->
       let
+        activityTokenOf :: Value -> Integer
+        activityTokenOf v = valueOf v (siActivityPolicyId l) (siActivityTokenName l)
+
+        buyerPkh :: PubKeyHash
+        buyerPkh = case txInfoSignatories of
+          [x] -> x
+          _ -> TRACE_ERROR("Expected on signer")
+
+        -- This needs to go to the exchanger address
+        exchangeInputs :: [(EscrowInput, Value)]
+        exchangeInputs = case getContinuingOutputs' txInfoData theExchangerHash txInfoOutputs of
+          [(ELI_EscrowInput x0, v0), (ELI_EscrowInput x1, v1)] ->
+            [(x0, v0), (x1, v1)]
+          _ -> TRACE_ERROR("Wrong exchange outputs")
+
+        sellerGetsActivityToken :: Bool
+        sellerGetsActivityToken = case filter ((== siOwner l) . eiOwner . fst ) exchangeInputs of
+          [(_, v)] -> activityTokenOf v == 1
+          _ -> TRACE_ERROR("Seller did not get a token")
+
+        buyerGetsActivityToken :: Bool
+        buyerGetsActivityToken = case filter ((== buyerPkh) . eiOwner . fst ) exchangeInputs of
+          [(_, v)] -> activityTokenOf v == 1
+          _ -> TRACE_ERROR("Bidder did not get a token")
+
+        onlyTwoActivityTokensMinted :: Bool
+        onlyTwoActivityTokensMinted =
+          activityTokenOf txInfoMint == 2
+
         isActive :: Bool
         isActive = case siCloseInfo l of
-          Nothing -> True
-          Just CloseInfo {..} -> ciTimeout `after` txInfoValidRange info
+          Just CloseInfo { ciTimeout = Just timeout} ->
+            timeout `after` txInfoValidRange
+          _ -> True
 
         scriptInput :: Value
         scriptInput = getOnlyScriptInput info
@@ -158,19 +215,35 @@ buyOfferValidator l u ctx =
                 )
           $ siSwapPayouts l <> unlockerPayouts
 
+        boostOf :: Value -> Integer
+        boostOf v = valueOf v (siBoostPolicyId l) (siBoostTokenName l)
+
+        boostWentToMarketplace :: Bool
+        boostWentToMarketplace = boostOf scriptInput <= boostOf (valuePaidTo info (siBoostPayoutPkh l))
+
       in TRACE_IF_FALSE("Outputs are invalid!", outputsAreValid)
       && TRACE_IF_FALSE("Input value is incorrect", scriptInputIsValid)
       && TRACE_IF_FALSE("Expired", isActive)
+      && TRACE_IF_FALSE(
+                "Seller did not get activity token",
+                sellerGetsActivityToken)
+      && TRACE_IF_FALSE(
+                "Buyer did not get activity token",
+                buyerGetsActivityToken)
+      && TRACE_IF_FALSE(
+                "Only two activity tokens minted",
+                onlyTwoActivityTokensMinted)
+      && TRACE_IF_FALSE("Boost did not go to the marketplace",
+          boostWentToMarketplace)
 
     Close -> case siCloseInfo l of
-      Nothing -> TRACE_ERROR("Not expired")
-      Just CloseInfo {..} ->
+      Just CloseInfo {ciTimeout = Just timeout, ..} ->
         let
           assetsReturnedToOwner :: Bool
           assetsReturnedToOwner = paidAtleastTo info (siOwner l) ciValue
 
           isExpired :: Bool
-          isExpired = ciTimeout `before` txInfoValidRange info
+          isExpired = timeout `before` txInfoValidRange
 
           scriptInput :: Value
           scriptInput = getOnlyScriptInput info
@@ -181,27 +254,52 @@ buyOfferValidator l u ctx =
         in TRACE_IF_FALSE("Assets not returned to owner", assetsReturnedToOwner)
         && TRACE_IF_FALSE("Not expired", isExpired)
         && TRACE_IF_FALSE("Input value is incorrect", scriptInputIsValid)
+      _ -> TRACE_ERROR("Not configured for expiration")
+    EmergencyClose ->  case siCloseInfo l of
+      Just CloseInfo {ciEmergencyCloser = Just emergencyCloser, ..} ->
+        let
+          signedByEmergencyCloser :: Bool
+          signedByEmergencyCloser = info `txSignedBy` emergencyCloser
+
+          assetsReturnedToOwner :: Bool
+          assetsReturnedToOwner = paidAtleastTo info (siOwner l) ciValue
+
+          scriptInput :: Value
+          scriptInput = getOnlyScriptInput info
+
+          scriptInputIsValid :: Bool
+          scriptInputIsValid = scriptInput `geq` ciValue
+
+        in TRACE_IF_FALSE("Not signed by NFT closer", signedByEmergencyCloser)
+        && TRACE_IF_FALSE("Assets not returned to owner", assetsReturnedToOwner)
+        && TRACE_IF_FALSE("Input value is incorrect", scriptInputIsValid)
+      _ -> TRACE_ERROR("Not configured for emergency close")
+
 
 -------------------------------------------------------------------------------
 -- Entry Points
 -------------------------------------------------------------------------------
 wrapDirectSaleValidator
-    :: BuiltinData
+    :: ValidatorHash
+    -> BuiltinData
     -> BuiltinData
     -> BuiltinData
     -> ()
-wrapDirectSaleValidator = wrap buyOfferValidator
+wrapDirectSaleValidator = wrap . buyOfferValidator
 
-validator :: Scripts.Validator
-validator = Scripts.mkValidatorScript $
+validator :: ValidatorHash -> Scripts.Validator
+validator config = Scripts.mkValidatorScript $
   $$(PlutusTx.compile [|| wrapDirectSaleValidator ||])
+    `applyCode`
+  liftCode config
 
-directSaleHash :: ValidatorHash
-directSaleHash = validatorHash validator
+directSaleHash :: ValidatorHash -> ValidatorHash
+directSaleHash = validatorHash . validator
 
-directSale :: PlutusScript PlutusScriptV1
+directSale :: ValidatorHash -> PlutusScript PlutusScriptV1
 directSale
   = PlutusScriptSerialised
-  $ SBS.toShort
-  $ LB.toStrict
-  $ serialise validator
+  . SBS.toShort
+  . LB.toStrict
+  . serialise
+  .validator
