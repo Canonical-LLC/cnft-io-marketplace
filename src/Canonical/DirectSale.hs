@@ -13,17 +13,13 @@ import           Cardano.Api.Shelley      (PlutusScript (..), PlutusScriptV1)
 import           PlutusTx
 import           PlutusTx.Prelude
 import           Ledger
-  ( PubKeyHash
-  , Address (..)
-  , ValidatorHash
-  )
 import qualified PlutusTx.AssocMap as M
 import           PlutusTx.AssocMap (Map)
 import           Plutus.V1.Ledger.Value
-import           Plutus.V1.Ledger.Contexts
-import           Ledger.Typed.Scripts
 import           Plutus.V1.Ledger.Credential
-
+import           Canonical.Shared
+import qualified Plutus.V1.Ledger.Scripts as Scripts
+#include "DebugUtilities.h"
 -------------------------------------------------------------------------------
 -- Types
 -------------------------------------------------------------------------------
@@ -33,14 +29,20 @@ data Payout = Payout
   , pValue   :: Value
   }
 
+data CloseInfo = CloseInfo
+  { ciTimeout :: POSIXTime
+  , ciValue   :: Value
+  }
+
 data SwapInput = SwapInput
   { siOwner         :: PubKeyHash
   -- ^ Used for the signer check on Cancel
   , siSwapPayouts   :: [Payout]
   -- ^ Divvy up the payout to different address for Swap
+  , siCloseInfo     :: Maybe CloseInfo
   }
 
-data BuyerInput = Cancel | Buy [Payout]
+data BuyerInput = Cancel | Buy [Payout] | Close
 
 -------------------------------------------------------------------------------
 -- Utilities
@@ -84,6 +86,11 @@ mergeAll = foldr mergeInequalities M.empty
 -------------------------------------------------------------------------------
 -- Boilerplate
 -------------------------------------------------------------------------------
+instance Eq CloseInfo where
+  x == y
+    =  ciTimeout x == ciTimeout y
+    && ciValue   x == ciValue   y
+
 instance Eq Payout where
   x == y
     =  pAddress x == pAddress y
@@ -91,8 +98,9 @@ instance Eq Payout where
 
 instance Eq SwapInput where
   x == y
-    =  siOwner x == siOwner y
+    =  siOwner       x == siOwner       y
     && siSwapPayouts x == siSwapPayouts y
+    && siCloseInfo   x == siCloseInfo   y
 
 instance Eq BuyerInput where
   x == y = case (x, y) of
@@ -100,6 +108,7 @@ instance Eq BuyerInput where
     (Buy a, Buy b) -> a == b
     _ -> False
 
+PlutusTx.unstableMakeIsData ''CloseInfo
 PlutusTx.unstableMakeIsData ''Payout
 PlutusTx.unstableMakeIsData ''SwapInput
 PlutusTx.unstableMakeIsData ''BuyerInput
@@ -125,11 +134,15 @@ buyOfferValidator l u ctx =
   -- to ensure there is only one script input.
   in case u of
     Cancel
-        -> traceIfFalse "Not signed by NFT seller!"
-        $  info `txSignedBy` siOwner l
+        -> TRACE_IF_FALSE("Not signed by NFT seller!", (info `txSignedBy` siOwner l))
 
     Buy unlockerPayouts ->
       let
+        isActive :: Bool
+        isActive = case siCloseInfo l of
+          Nothing -> True
+          Just CloseInfo {..} -> ciTimeout `after` txInfoValidRange info
+
         scriptInput :: Value
         scriptInput = getOnlyScriptInput info
 
@@ -145,24 +158,43 @@ buyOfferValidator l u ctx =
                 )
           $ siSwapPayouts l <> unlockerPayouts
 
-      in traceIfFalse "Outputs are invalid!" outputsAreValid
-      && traceIfFalse "Input value is incorrect" scriptInputIsValid
+      in TRACE_IF_FALSE("Outputs are invalid!", outputsAreValid)
+      && TRACE_IF_FALSE("Input value is incorrect", scriptInputIsValid)
+      && TRACE_IF_FALSE("Expired", isActive)
+
+    Close -> case siCloseInfo l of
+      Nothing -> TRACE_ERROR("Not expired")
+      Just CloseInfo {..} ->
+        let
+          assetsReturnedToOwner :: Bool
+          assetsReturnedToOwner = paidAtleastTo info (siOwner l) ciValue
+
+          isExpired :: Bool
+          isExpired = ciTimeout `before` txInfoValidRange info
+
+          scriptInput :: Value
+          scriptInput = getOnlyScriptInput info
+
+          scriptInputIsValid :: Bool
+          scriptInputIsValid = scriptInput `geq` ciValue
+
+        in TRACE_IF_FALSE("Assets not returned to owner", assetsReturnedToOwner)
+        && TRACE_IF_FALSE("Not expired", isExpired)
+        && TRACE_IF_FALSE("Input value is incorrect", scriptInputIsValid)
 
 -------------------------------------------------------------------------------
 -- Entry Points
 -------------------------------------------------------------------------------
-data Buying
-instance ValidatorTypes Buying where
-  type instance DatumType Buying = SwapInput
-  type instance RedeemerType Buying = BuyerInput
+wrapDirectSaleValidator
+    :: BuiltinData
+    -> BuiltinData
+    -> BuiltinData
+    -> ()
+wrapDirectSaleValidator = wrap buyOfferValidator
 
-validator :: TypedValidator Buying
-validator =
-  mkTypedValidator @Buying
-    $$(PlutusTx.compile [|| buyOfferValidator ||])
-    $$(PlutusTx.compile [|| wrap ||])
-  where
-    wrap = wrapValidator
+validator :: Scripts.Validator
+validator = Scripts.mkValidatorScript $
+  $$(PlutusTx.compile [|| wrapDirectSaleValidator ||])
 
 directSaleHash :: ValidatorHash
 directSaleHash = validatorHash validator
@@ -172,5 +204,4 @@ directSale
   = PlutusScriptSerialised
   $ SBS.toShort
   $ LB.toStrict
-  $ serialise
-  $ validatorScript validator
+  $ serialise validator
