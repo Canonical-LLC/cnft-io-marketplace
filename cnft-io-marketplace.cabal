@@ -41,6 +41,7 @@ library
     Canonical.BidMinter
     Canonical.ActivityMinter
     Canonical.ActivityTokenExchanger
+    Canonical.DirectSale
   build-depends:
     , aeson
     , bytestring

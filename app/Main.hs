@@ -11,6 +11,7 @@ import Canonical.Escrow
 import Canonical.BidMinter
 import Canonical.ActivityMinter
 import Canonical.ActivityTokenExchanger
+import Canonical.DirectSale
 import Prelude
 import Data.String
 
@@ -33,6 +34,8 @@ data Options = Options
   , initialAmount             :: Int
   , tokenName                 :: String
   , policyId                  :: String
+  , directSaleOutput          :: String
+  , directSaleHashOutput      :: String
   } deriving (Show, Generic)
 
 instance ParseRecord Options where
@@ -101,8 +104,14 @@ run Options{..} = do
 
   writeFile batcherHashOutput $ show theAuctionHash
 
-  writeFileTextEnvelope activityMinterOutput Nothing (activity [theAuctionHash]) >>= \case
+  writeFileTextEnvelope directSaleOutput Nothing directSale >>= \case
+    Left err -> print $ displayError err
+    Right () -> putStrLn $ "wrote validator to file " ++ directSaleOutput
+
+  writeFile directSaleHashOutput $ show directSaleHash
+
+  writeFileTextEnvelope activityMinterOutput Nothing (activity [theAuctionHash, directSaleHash]) >>= \case
     Left err -> print $ displayError err
     Right () -> putStrLn $ "wrote activity minter to file " ++ activityMinterOutput
 
-  writeFile activityMinterHashOutput $ show $ activityPolicyId [theAuctionHash]
+  writeFile activityMinterHashOutput $ show $ activityPolicyId [theAuctionHash, directSaleHash]

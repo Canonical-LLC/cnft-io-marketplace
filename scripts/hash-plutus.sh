@@ -15,3 +15,8 @@ cardano-cli address build \
   --payment-script-file $thisDir/exchanger.plutus \
   $BLOCKCHAIN \
   --out-file $thisDir/$BLOCKCHAIN_PREFIX/exchanger.addr
+
+cardano-cli address build \
+  --payment-script-file $thisDir/direct-sale.plutus \
+  $BLOCKCHAIN \
+  --out-file $thisDir/$BLOCKCHAIN_PREFIX/direct-sale.addr

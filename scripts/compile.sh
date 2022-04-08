@@ -24,7 +24,9 @@ cabal run exe:create-sc -- \
   --rate-denominator=2 \
   --initial-amount=10 \
   --token-name="CNFTIO" \
-  --policy-id=$(cat $thisDir/test-policies/test-policy-0-id.txt)
+  --policy-id=$(cat $thisDir/test-policies/test-policy-0-id.txt) \
+  --direct-sale-output=scripts/direct-sale.plutus \
+  --direct-sale-hash-output=scripts/direct-sale-hash.txt
 )
 
 $thisDir/hash-plutus.sh
