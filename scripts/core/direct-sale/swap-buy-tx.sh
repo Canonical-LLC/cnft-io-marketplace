@@ -4,6 +4,8 @@ thisDir=$(dirname "$0")
 baseDir=$thisDir/../../
 tempDir=$baseDir/../temp
 
+DATUM_PREFIX=${DATUM_PREFIX:-0}
+
 bodyFile=temp/swap-tx-body.01
 outFile=temp/swap-tx.01
 buyerAddr=$1
@@ -19,16 +21,25 @@ royalitiesAmount="${10}"
 redeemerFile="${11}"
 datumHash="${12}"
 spenderAddress="${13}"
+buyerExchangerDatum="${14}"
 nftValidatorFile=$baseDir/direct-sale.plutus
 scriptHash=$(cat scripts/$BLOCKCHAIN_PREFIX/direct-sale.addr)
 
 utxoScript=$(scripts/query/direct-sale.sh | grep $datumHash | head -n 1 | cardano-cli-balance-fixer parse-as-utxo)
 changeOutput=$(cardano-cli-balance-fixer change --address $spenderAddress $BLOCKCHAIN)
 
+activityToken="$(cat $baseDir/activity-minter-hash.txt).4143544956495459"
+mintValue="2 $activityToken"
+activityMinterFile=$baseDir/activity-minter.plutus
+mintActivityTokenFile=$baseDir/redeemers/mint.json
+
 extraOutput=""
 if [ "$changeOutput" != "" ];then
   extraOutput="+ $changeOutput"
 fi
+
+exchanger=$(cat $baseDir/$BLOCKCHAIN_PREFIX/exchanger.addr)
+sellerExchangerDatum=$tempDir/$BLOCKCHAIN_PREFIX/datums/$DATUM_PREFIX/sellerExchange.json
 
 cardano-cli transaction build \
     --alonzo-era \
@@ -45,8 +56,15 @@ cardano-cli transaction build \
     --tx-out "$marketplaceAddr + $marketPlaceAmount" \
     --tx-out "$royalitiesAddr + $royalitiesAmount" \
     --tx-out "$spenderAddress + 3000000 lovelace $extraOutput" \
+    --tx-out "$exchanger + 2000000 lovelace + 1 $activityToken" \
+    --tx-out-datum-embed-file $sellerExchangerDatum \
+    --tx-out "$exchanger + 2000000 lovelace + 1 $activityToken" \
+    --tx-out-datum-embed-file $buyerExchangerDatum \
     --change-address $spenderAddress \
     --protocol-params-file $baseDir/$BLOCKCHAIN_PREFIX/protocol-parameters.json \
+    --mint "$mintValue" \
+    --mint-script-file $activityMinterFile \
+    --mint-redeemer-file $mintActivityTokenFile \
     --out-file $bodyFile
 
 cardano-cli transaction sign \

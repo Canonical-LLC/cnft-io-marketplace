@@ -25,7 +25,6 @@ import           Canonical.ActivityTokenExchanger
 -- Types
 -------------------------------------------------------------------------------
 
-
 data Payout = Payout
   { pAddress :: PubKeyHash
   , pValue   :: Value

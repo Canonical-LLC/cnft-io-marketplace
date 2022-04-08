@@ -1,4 +1,4 @@
-#define DEBUG_EXCHANGE
+#define DEBUG
 
 
 #if defined(DEBUG)
