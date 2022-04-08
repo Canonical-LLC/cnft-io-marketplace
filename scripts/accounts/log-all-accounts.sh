@@ -14,5 +14,5 @@ $thisDir/buyer-1.sh > $outputDir/buyer-1.json
 $thisDir/buyer.sh > $outputDir/buyer.json
 $thisDir/marketplace.sh > $outputDir/marketplace.json
 $thisDir/royalties.sh > $outputDir/royalties.json
-$thisDir/sc.sh > $outputDir/sc.json
+$thisDir/direct-sale.sh > $outputDir/sc.json
 $thisDir/seller.sh > $outputDir/seller.json

@@ -5,7 +5,7 @@ baseDir=$thisDir/../
 echo "seller"
 $thisDir/seller.sh
 echo "\nsc"
-$thisDir/sc.sh | tail -n +2
+$thisDir/direct-sale.sh | tail -n +2
 echo "\nbuyer"
 $thisDir/buyer.sh | tail -n +2
 echo "\nbuyer-1"
