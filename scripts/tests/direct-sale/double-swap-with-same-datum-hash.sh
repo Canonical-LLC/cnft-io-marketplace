@@ -3,14 +3,18 @@ set -eu
 thisDir=$(dirname "$0")
 baseDir=$thisDir/../..
 
-$baseDir/minting/mint-0-policy.sh buyer
+$baseDir/minting/mint-0-policy.sh
 $baseDir/wait/until-next-block.sh
-$baseDir/failure-cases/direct-sale/lock-no-nft.sh
+$baseDir/happy-path/direct-sale/lock-tx.sh
+$baseDir/wait/until-next-block.sh
+$baseDir/minting/mint-0-policy.sh
+$baseDir/wait/until-next-block.sh
+$baseDir/happy-path/direct-sale/lock-tx.sh
 $baseDir/wait/until-next-block.sh
 
 detected=false
 
-"$baseDir/failure-cases/direct-sale/swap-already-has-nft-tx.sh" || {
+"$baseDir/failure-cases/direct-sale/double-swap-with-same-datum-hash.sh" || {
     detected=true
 }
 
