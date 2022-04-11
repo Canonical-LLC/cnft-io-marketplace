@@ -22,11 +22,12 @@ redeemerFile="${11}"
 datumHash="${12}"
 spenderAddress="${13}"
 buyerExchangerDatum="${14}"
+subtractOutput="${15:- 0 lovelace}"
 nftValidatorFile=$baseDir/direct-sale.plutus
 scriptHash=$(cat scripts/$BLOCKCHAIN_PREFIX/direct-sale.addr)
 
 utxoScript=$(scripts/query/direct-sale.sh | grep $datumHash | head -n 1 | cardano-cli-balance-fixer parse-as-utxo)
-changeOutput=$(cardano-cli-balance-fixer change --address $spenderAddress $BLOCKCHAIN)
+changeOutput=$(cardano-cli-balance-fixer change --address $spenderAddress -o "$subtractOutput" $BLOCKCHAIN)
 
 activityToken="$(cat $baseDir/activity-minter-hash.txt).4143544956495459"
 mintValue="2 $activityToken"
@@ -40,6 +41,10 @@ fi
 
 exchanger=$(cat $baseDir/$BLOCKCHAIN_PREFIX/exchanger.addr)
 sellerExchangerDatum=$tempDir/$BLOCKCHAIN_PREFIX/datums/$DATUM_PREFIX/sellerExchange.json
+
+currentSlot=$(cardano-cli query tip $BLOCKCHAIN | jq .slot)
+startSlot=$currentSlot
+nextTenSlots=$(($currentSlot+150))
 
 cardano-cli transaction build \
     --alonzo-era \
@@ -65,6 +70,8 @@ cardano-cli transaction build \
     --mint "$mintValue" \
     --mint-script-file $activityMinterFile \
     --mint-redeemer-file $mintActivityTokenFile \
+    --invalid-before $startSlot \
+    --invalid-hereafter $nextTenSlots \
     --out-file $bodyFile
 
 cardano-cli transaction sign \

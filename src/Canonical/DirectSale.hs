@@ -61,7 +61,6 @@ data SwapInput = SwapInput
   }
 
 data BuyerInput = Cancel | Buy [Payout] | Close | EmergencyClose
-
 -------------------------------------------------------------------------------
 -- Utilities
 -------------------------------------------------------------------------------
