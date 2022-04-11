@@ -12,3 +12,4 @@ $thisDir/wrong-nft.sh
 $thisDir/missing-nft.sh
 $thisDir/double-swap-with-same-datum-hash.sh
 $thisDir/buyer-has-no-activity-token.sh
+$thisDir/seller-has-no-activity-token.sh
