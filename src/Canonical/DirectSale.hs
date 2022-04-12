@@ -20,11 +20,11 @@ import           Plutus.V1.Ledger.Credential
 import           Canonical.Shared
 import qualified Plutus.V1.Ledger.Scripts as Scripts
 import           Canonical.ActivityTokenExchanger
+import qualified Ledger.Ada as Ada
 #include "DebugUtilities.h"
 -------------------------------------------------------------------------------
 -- Types
 -------------------------------------------------------------------------------
-
 data Payout = Payout
   { pAddress :: PubKeyHash
   , pValue   :: Value
@@ -119,7 +119,9 @@ instance Eq SwapInput where
     && siSwapPayouts         x == siSwapPayouts       y
     && siCloseInfo           x == siCloseInfo         y
     && siActivityTokenName   x == siActivityTokenName y
-    && siActivityPolicyId    x == siActivityPolicyId  y
+    && siBoostTokenName      x == siBoostTokenName    y
+    && siBoostPolicyId       x == siBoostPolicyId     y
+    && siBoostPayoutPkh      x == siBoostPayoutPkh    y
 
 instance Eq BuyerInput where
   x == y = case (x, y) of
@@ -131,7 +133,6 @@ PlutusTx.unstableMakeIsData ''CloseInfo
 PlutusTx.unstableMakeIsData ''Payout
 PlutusTx.unstableMakeIsData ''SwapInput
 PlutusTx.unstableMakeIsData ''BuyerInput
-
 
 -------------------------------------------------------------------------------
 -- Validation
@@ -153,6 +154,9 @@ getContinuingOutputs' datums vh outs =
         == ScriptCredential vh)
       outs
     )
+
+lovelaces :: Value -> Integer
+lovelaces v = valueOf v Ada.adaSymbol Ada.adaToken
 
 -- check that each user is paid
 -- and the total is correct
@@ -189,19 +193,25 @@ buyOfferValidator theExchangerHash l u ctx =
             [(x0, v0), (x1, v1)]
           _ -> TRACE_ERROR("Wrong exchange outputs")
 
+        activityTokenAmount :: Integer
+        activityTokenAmount
+          = max 1
+          $ foldr (\Payout {..} acc -> acc + lovelaces pValue) 0 (siSwapPayouts l)
+          `divide` 20_000_000
+
         sellerGetsActivityToken :: Bool
         sellerGetsActivityToken = case filter ((== siOwner l) . eiOwner . fst ) exchangeInputs of
-          [(_, v)] -> activityTokenOf v == 1
+          [(_, v)] -> activityTokenOf v == activityTokenAmount
           _ -> TRACE_ERROR("Seller did not get a token")
 
         buyerGetsActivityToken :: Bool
         buyerGetsActivityToken = case filter ((== buyerPkh) . eiOwner . fst ) exchangeInputs of
-          [(_, v)] -> activityTokenOf v == 1
+          [(_, v)] -> activityTokenOf v == activityTokenAmount
           _ -> TRACE_ERROR("Bidder did not get a token")
 
         onlyTwoActivityTokensMinted :: Bool
         onlyTwoActivityTokensMinted =
-          activityTokenOf txInfoMint == 2
+          activityTokenOf txInfoMint == (2 * activityTokenAmount)
 
         isActive :: Bool
         isActive = case siCloseInfo l of

@@ -89,7 +89,6 @@ pubKeyOutputsAt' pk outs =
         flt _                     = Nothing
     in mapMaybe flt outs
 
-
 getContinuingOutputs'
   :: DataConstraint(a)
   => [(DatumHash, Datum)]
@@ -269,7 +268,6 @@ payoutIsValid total info
 paidApplyPercent :: [AuctionTxOut] -> (PubKeyHash, Lovelaces) -> Bool
 paidApplyPercent info (addr, owed)
   = lovelacesPaidTo info addr >= owed
-
 -------------------------------------------------------------------------------
 {-
 
@@ -379,6 +377,7 @@ bidHasEnoughAda :: (Bid, Value, Value) -> Bool
 bidHasEnoughAda (Bid{..}, _, v)
   =  valueOf v Ada.adaSymbol Ada.adaToken
   >= bidAmount
+
 {-
 This is an auction validator. It is configured with an asset, reserve price,
 seller, and expiration.
@@ -543,7 +542,10 @@ mkValidator theExchangerHash auction@Auction {..} action AuctionScriptContext
               activityTokenOf :: Value -> Integer
               activityTokenOf v = valueOf v aActivityPolicyId aActivityTokenName
 
-              -- TODO
+              activityTokenAmount :: Integer
+              activityTokenAmount
+                = max 1 $ bidAmount `divide` 20_000_000
+
               -- This needs to go to the exchanger address
               exchangeInputs :: [(EscrowInput, Value)]
               exchangeInputs = case getContinuingOutputs' atxInfoData theExchangerHash atxInfoOutputs of
@@ -553,17 +555,17 @@ mkValidator theExchangerHash auction@Auction {..} action AuctionScriptContext
 
               sellerGetsActivityToken :: Bool
               sellerGetsActivityToken = case filter ((== aSeller) . eiOwner . fst ) exchangeInputs of
-                [(_, v)] -> activityTokenOf v == 1
+                [(_, v)] -> activityTokenOf v == activityTokenAmount
                 _ -> TRACE_ERROR("Seller did not get a token")
 
               buyerGetsActivityToken :: Bool
               buyerGetsActivityToken = case filter ((== bidBidder) . eiOwner . fst ) exchangeInputs of
-                [(_, v)] -> activityTokenOf v == 1
+                [(_, v)] -> activityTokenOf v == activityTokenAmount
                 _ -> TRACE_ERROR("Bidder did not get a token")
 
               onlyTwoActivityTokensMinted :: Bool
               onlyTwoActivityTokensMinted =
-                activityTokenOf atxInfoMint == 2
+                activityTokenOf atxInfoMint == (2 * activityTokenAmount)
 
             in TRACE_IF_FALSE_CLOSE(
                 "expected highest bidder to get token",
