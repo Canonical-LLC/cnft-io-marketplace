@@ -18,3 +18,5 @@ $thisDir/seller-has-no-activity-token.sh
 $thisDir/close-assets-not-returned.sh
 $thisDir/close-too-early.sh
 $thisDir/close-with-no-timeout.sh
+$thisDir/lock-emergency-close-wrong-closer.sh
+$thisDir/lock-emergency-close.sh

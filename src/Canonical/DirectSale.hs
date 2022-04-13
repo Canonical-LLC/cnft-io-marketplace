@@ -99,7 +99,6 @@ mergeInequalities = M.unionWith (+)
 
 mergeAll :: [Map PubKeyHash Value] -> Map PubKeyHash Value
 mergeAll = foldr mergeInequalities M.empty
-
 -------------------------------------------------------------------------------
 -- Boilerplate
 -------------------------------------------------------------------------------

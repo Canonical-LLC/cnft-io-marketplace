@@ -149,6 +149,168 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/buy.json
 
 EOF
 
+cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/buy-emergency-close.json
+{
+  "constructor": 0,
+  "fields": [
+    {
+      "bytes": "$sellerPkh"
+    },
+    {
+      "list": [
+        {
+          "constructor": 0,
+          "fields": [
+            {
+              "bytes": "$sellerPkh"
+            },
+            {
+              "map": [
+                {
+                  "k": {
+                      "bytes": ""
+                    },
+                  "v": {
+                    "map":[
+                      { "k":
+                        {
+                          "bytes": ""
+                        },
+                        "v":
+                        {
+                          "int": 8000000
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "constructor": 0,
+          "fields": [
+            {
+              "bytes": "$marketplacePkh"
+            },
+            {
+              "map": [
+                {
+                  "k":
+                    {
+                      "bytes": ""
+                    },
+                  "v": {
+                    "map": [
+                      { "k":
+                        {
+                          "bytes": ""
+                        }
+                      ,
+                        "v":
+                        {
+                          "int": 1000000
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "constructor": 0,
+          "fields": [
+            {
+              "bytes": "$royaltyPkh"
+            },
+            {
+              "map": [
+                {
+                  "k": {
+                      "bytes": ""
+                    },
+                  "v": {
+                    "map": [
+                      {
+                        "k": {
+                      "bytes": ""
+                    },
+                        "v":
+                        {
+                          "int": 1000000
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    { "constructor": 0,
+      "fields": [
+        { "constructor": 0,
+          "fields": [
+            { "constructor": 1,
+              "fields": []
+            },
+            { "constructor": 0,
+              "fields": [
+                {
+                  "bytes" : "$marketplacePkh"
+                }
+              ]
+            },
+            {
+              "map": [
+                {
+                  "k": {
+                    "bytes": "d6cfdbedd242056674c0e51ead01785497e3a48afbbb146dc72ee1e2"
+                  },
+                  "v": {
+                    "map": [
+                      {
+                        "k": {
+                          "bytes": "123456"
+                        },
+                        "v": {
+                          "int": 1
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "bytes": "$activityTokenName"
+    },
+    {
+      "bytes": "$activityPolicyId"
+    },
+    {
+      "bytes": "$boostTokenName"
+    },
+    {
+      "bytes": "$boostPolicyId"
+    },
+    {
+      "bytes": "$marketplacePkh"
+    }
+  ]
+}
+
+EOF
+
 cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/redeemers/$prefix/buy.json
 {
   "constructor": 1,
