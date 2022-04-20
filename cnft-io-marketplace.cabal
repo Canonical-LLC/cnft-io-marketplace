@@ -39,8 +39,6 @@ library
     Canonical.Escrow
     Canonical.Shared
     Canonical.BidMinter
-    Canonical.ActivityMinter
-    Canonical.ActivityTokenExchanger
     Canonical.DirectSale
   build-depends:
     , aeson

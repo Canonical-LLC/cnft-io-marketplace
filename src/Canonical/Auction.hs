@@ -24,7 +24,6 @@ import qualified PlutusTx.AssocMap as M
 import           PlutusTx.AssocMap (Map)
 import           Canonical.Shared
 import           Canonical.BidMinter
-import           Canonical.ActivityTokenExchanger
 #include "DebugUtilities.h"
 
 type BidEscrowLockerInput = EscrowLockerInput BidData
@@ -149,8 +148,9 @@ data Auction = Auction
   , aEscrowValidator   :: ValidatorHash
   , aValue             :: Value
   , aBidMinterPolicyId :: CurrencySymbol
-  , aActivityTokenName :: TokenName
-  , aActivityPolicyId  :: CurrencySymbol
+  , aBoostTokenName    :: TokenName
+  , aBoostPolicyId     :: CurrencySymbol
+  , aBoostPayoutPkh    :: PubKeyHash
   }
 
 data Action = CollectBids | Close
@@ -170,8 +170,9 @@ instance Eq Auction where
     && (aEscrowValidator   x == aEscrowValidator   y)
     && (aValue             x == aValue             y)
     && (aBidMinterPolicyId x == aBidMinterPolicyId y)
-    && (aActivityTokenName x == aActivityTokenName y)
-    && (aActivityPolicyId  x == aActivityPolicyId  y)
+    && (aBoostTokenName    x == aBoostTokenName    y)
+    && (aBoostPolicyId     x == aBoostPolicyId     y)
+    && (aBoostPayoutPkh    x == aBoostPayoutPkh    y)
 
 unstableMakeIsData ''Auction
 unstableMakeIsData ''Action
@@ -392,8 +393,8 @@ and the bid Ada is split to the addresses in the 'aPayoutPercentages'.
 The payout amounts are determined by the percentages in the
 'aPayoutPercentages' map.
 -}
-mkValidator :: ValidatorHash -> Auction -> Action -> AuctionScriptContext -> Bool
-mkValidator theExchangerHash auction@Auction {..} action AuctionScriptContext
+mkValidator :: Auction -> Action -> AuctionScriptContext -> Bool
+mkValidator auction@Auction {..} action AuctionScriptContext
   { aScriptContextTxInfo = AuctionTxInfo {..}
   , aScriptContextPurpose = ASpending thisOutRef
   } =
@@ -539,37 +540,33 @@ mkValidator theExchangerHash auction@Auction {..} action AuctionScriptContext
                 (getsValue aSeller aValue))
           Just Bid{..} ->
             let
-              activityTokenOf :: Value -> Integer
-              activityTokenOf v = valueOf v aActivityPolicyId aActivityTokenName
+              boostOf :: Value -> Integer
+              boostOf v = valueOf v aBoostPolicyId aBoostTokenName
 
               activityTokenAmount :: Integer
               activityTokenAmount
                 = max 1 $ bidAmount `divide` 20_000_000
 
-              -- This needs to go to the exchanger address
-              exchangeInputs :: [(EscrowInput, Value)]
-              exchangeInputs = case getContinuingOutputs' atxInfoData theExchangerHash atxInfoOutputs of
-                [(ELI_EscrowInput x0, v0), (ELI_EscrowInput x1, v1)] ->
-                  [(x0, atxOutValue v0), (x1, atxOutValue v1)]
-                _ -> TRACE_ERROR("Wrong exchange outputs")
+              sellerPaidValue :: Value
+              sellerPaidValue = valuePaidTo' atxInfoOutputs aSeller
 
               sellerGetsActivityToken :: Bool
-              sellerGetsActivityToken = case filter ((== aSeller) . eiOwner . fst ) exchangeInputs of
-                [(_, v)] -> activityTokenOf v == activityTokenAmount
-                _ -> TRACE_ERROR("Seller did not get a token")
+              sellerGetsActivityToken
+                = boostOf sellerPaidValue >= activityTokenAmount
+
+              bidderValue :: Value
+              bidderValue = valuePaidTo' atxInfoOutputs bidBidder
 
               buyerGetsActivityToken :: Bool
-              buyerGetsActivityToken = case filter ((== bidBidder) . eiOwner . fst ) exchangeInputs of
-                [(_, v)] -> activityTokenOf v == activityTokenAmount
-                _ -> TRACE_ERROR("Bidder did not get a token")
+              buyerGetsActivityToken
+                = boostOf bidderValue >= activityTokenAmount
 
-              onlyTwoActivityTokensMinted :: Bool
-              onlyTwoActivityTokensMinted =
-                activityTokenOf atxInfoMint == (2 * activityTokenAmount)
+              boostWentToMarketplace :: Bool
+              boostWentToMarketplace = boostOf actualScriptValue <= boostOf (valuePaidTo' atxInfoOutputs aBoostPayoutPkh)
 
             in TRACE_IF_FALSE_CLOSE(
                 "expected highest bidder to get token",
-                (getsValue bidBidder aValue))
+                (bidderValue `geq` aValue))
             && TRACE_IF_FALSE_CLOSE(
                 "expected all sellers to get highest bid",
                 (payoutIsValid bidAmount atxInfoOutputs aPayoutPercentages))
@@ -580,30 +577,28 @@ mkValidator theExchangerHash auction@Auction {..} action AuctionScriptContext
                 "Buyer did not get activity token",
                 buyerGetsActivityToken)
             && TRACE_IF_FALSE_CLOSE(
-                "Only two activity tokens minted",
-                onlyTwoActivityTokensMinted)
+                "Boost went to marketplace",
+                boostWentToMarketplace)
 
 -------------------------------------------------------------------------------
 -- Boilerplate
 -------------------------------------------------------------------------------
-auctionWrapped :: ValidatorHash -> BuiltinData -> BuiltinData -> BuiltinData -> ()
-auctionWrapped = wrap . mkValidator
+auctionWrapped :: BuiltinData -> BuiltinData -> BuiltinData -> ()
+auctionWrapped = wrap mkValidator
 
-validator :: ValidatorHash -> Scripts.Validator
-validator config = mkValidatorScript $
+validator :: Scripts.Validator
+validator = mkValidatorScript $
   $$(PlutusTx.compile [|| \c -> auctionWrapped c ||])
-  `applyCode`
-  liftCode config
 
-auctionScriptHash :: ValidatorHash -> ValidatorHash
-auctionScriptHash = validatorHash . validator
+auctionScriptHash :: ValidatorHash
+auctionScriptHash = validatorHash validator
 -------------------------------------------------------------------------------
 -- Entry point
 -------------------------------------------------------------------------------
-auctionScript :: ValidatorHash -> PlutusScript PlutusScriptV1
+auctionScript :: PlutusScript PlutusScriptV1
 auctionScript
   = PlutusScriptSerialised
   . SBS.toShort
   . LB.toStrict
-  . serialise
-  . validator
+  $ serialise
+    validator

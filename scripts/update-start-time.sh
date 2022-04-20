@@ -24,8 +24,8 @@ buyer1Pkh=$(cat $tempDir/$BLOCKCHAIN_PREFIX/pkhs/buyer1-pkh.txt)
 batcherValidatorHash=$(cat $thisDir/auction-hash.txt)
 escrowValidatorHash=$(cat $thisDir/escrow-hash.txt)
 bidMinterHash=$(cat $thisDir/bid-minter-hash.txt)
-activityPolicyId=$(cat $thisDir/activity-minter-hash.txt)
-activityTokenName=4143544956495459
+boostTokenName=434E4654494F
+boostPolicyId=$(cat $thisDir/test-policies/test-policy-0-id.txt)
 
 cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/start.json
 {
@@ -105,10 +105,13 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/start.json
       "bytes": "$bidMinterHash"
     },
     {
-      "bytes": "4143544956495459"
+      "bytes": "$boostTokenName"
     },
     {
-      "bytes": "$activityPolicyId"
+      "bytes": "$boostPolicyId"
+    },
+    {
+      "bytes": "$marketplacePkh"
     }
   ]
 }
@@ -207,10 +210,13 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/bid-1.json
       "bytes": "$bidMinterHash"
     },
     {
-      "bytes": "4143544956495459"
+      "bytes": "$boostTokenName"
     },
     {
-      "bytes": "$activityPolicyId"
+      "bytes": "$boostPolicyId"
+    },
+    {
+      "bytes": "$marketplacePkh"
     }
   ]
 }
@@ -309,10 +315,13 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/reserve-not-met-bid-1.js
       "bytes": "$bidMinterHash"
     },
     {
-      "bytes": "4143544956495459"
+      "bytes": "$boostTokenName"
     },
     {
-      "bytes": "$activityPolicyId"
+      "bytes": "$boostPolicyId"
+    },
+    {
+      "bytes": "$marketplacePkh"
     }
   ]
 }
@@ -411,10 +420,13 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/seller-bid-1.json
       "bytes": "$bidMinterHash"
     },
     {
-      "bytes": "4143544956495459"
+      "bytes": "$boostTokenName"
     },
     {
-      "bytes": "$activityPolicyId"
+      "bytes": "$boostPolicyId"
+    },
+    {
+      "bytes": "$marketplacePkh"
     }
   ]
 }
@@ -513,10 +525,13 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/bid-2.json
       "bytes": "$bidMinterHash"
     },
     {
-      "bytes": "4143544956495459"
+      "bytes": "$boostTokenName"
     },
     {
-      "bytes": "$activityPolicyId"
+      "bytes": "$boostPolicyId"
+    },
+    {
+      "bytes": "$marketplacePkh"
     }
   ]
 }
@@ -738,98 +753,6 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/escrow-bid-3.json
     },
     {
       "bytes": "$bidMinterHash"
-    }
-  ]
-}
-EOF
-
-cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/sellerExchange.json
-{
-  "constructor": 0,
-  "fields": [
-    {
-      "constructor": 0,
-      "fields": [
-        {
-          "bytes": "$sellerPkh"
-        }
-      ]
-    }
-  ]
-}
-EOF
-
-cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/buyerExchange.json
-{
-  "constructor": 0,
-  "fields": [
-    {
-      "constructor": 0,
-      "fields": [
-        {
-          "bytes": "$buyerPkh"
-        }
-      ]
-    }
-  ]
-}
-EOF
-
-cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/buyer1Exchange.json
-{
-  "constructor": 0,
-  "fields": [
-    {
-      "constructor": 0,
-      "fields": [
-        {
-          "bytes": "$buyer1Pkh"
-        }
-      ]
-    }
-  ]
-}
-EOF
-
-cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/index0.json
-{
-  "constructor": 1,
-  "fields": [
-    {
-      "constructor": 0,
-      "fields": [
-        {
-          "int": 0
-        },
-        {
-          "bytes": "$activityPolicyId"
-        },
-        {
-          "bytes": "$activityTokenName"
-        }
-      ]
-    }
-  ]
-}
-EOF
-
-cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/index1.json
-{
-  "constructor": 1,
-  "fields": [
-    {
-      "constructor": 0,
-      "fields": [
-        {
-          "int": 1
-        },
-        {
-          "bytes": "$activityPolicyId"
-        },
-        {
-          "bytes": "$activityTokenName"
-        }
-      ]
     }
   ]
 }
