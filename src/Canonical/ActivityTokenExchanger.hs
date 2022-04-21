@@ -47,17 +47,17 @@ mkNftMinter theTokenName utxo _ ctx =
     outputIndexIsZero :: Bool
     outputIndexIsZero = case filter (\TxOut {..} -> hasSingleNft txOutValue) txInfoOutputs of
       [TxOut {..}] -> case txOutDatumHash of
-        Nothing -> TRACE_ERROR("No datum hash")
+        Nothing -> traceError "No datum hash"
         Just dh -> case PlutusTx.fromBuiltinData (getDatum (extractDatum txInfoData dh)) of
-          Nothing -> TRACE_ERROR("Failed to convert datum")
+          Nothing -> traceError "Failed to convert datum"
           Just (ELI_TokenCounter TokenCounter {..})
-            -> TRACE_IF_FALSE("Wager index is not zero", (tcCount == 0))
-          _ -> TRACE_ERROR("Wrong type of datum")
-      _ -> TRACE_ERROR("Impossible. No minted output.")
+            -> traceIfFalse "Wager index is not zero" (tcCount == 0)
+          _ -> traceError "Wrong type of datum"
+      _ -> traceError "Impossible. No minted output."
 
-  in TRACE_IF_FALSE("Missing significant UTxO!", hasUTxO)
-  && TRACE_IF_FALSE("Wrong mint amount!"       , onlyOneTokenMinted)
-  && TRACE_IF_FALSE("Output index is not zero" , outputIndexIsZero)
+  in traceIfFalse "Missing significant UTxO!" hasUTxO
+  && traceIfFalse "Wrong mint amount!"        onlyOneTokenMinted
+  && traceIfFalse "Output index is not zero"  outputIndexIsZero
 
 nftPolicy :: TokenName -> TxOutRef -> Scripts.MintingPolicy
 nftPolicy theTokenName utxo = mkMintingPolicyScript $

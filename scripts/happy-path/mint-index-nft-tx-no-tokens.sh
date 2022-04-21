@@ -12,4 +12,4 @@ $baseDir/core/mint-index-nft-tx.sh \
   $(cat ~/$BLOCKCHAIN_PREFIX/seller.addr) \
   ~/$BLOCKCHAIN_PREFIX/seller.skey \
   $tempDir/$BLOCKCHAIN_PREFIX/datums/$DATUM_PREFIX/index0.json \
-  "2000000 lovelace"
+  "2000000 lovelace + 1 $nftAsset"
