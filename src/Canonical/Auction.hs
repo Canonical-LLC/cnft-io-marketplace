@@ -151,9 +151,10 @@ data Auction = Auction
   , aBidMinterPolicyId :: CurrencySymbol
   , aActivityTokenName :: TokenName
   , aActivityPolicyId  :: CurrencySymbol
+  , aEmergencyCloser   :: Maybe PubKeyHash
   }
 
-data Action = CollectBids | Close
+data Action = CollectBids | Close | EmergencyClose
 
 -------------------------------------------------------------------------------
 -- Boilerplate
@@ -172,6 +173,7 @@ instance Eq Auction where
     && (aBidMinterPolicyId x == aBidMinterPolicyId y)
     && (aActivityTokenName x == aActivityTokenName y)
     && (aActivityPolicyId  x == aActivityPolicyId  y)
+    && (aEmergencyCloser   x == aEmergencyCloser   y)
 
 unstableMakeIsData ''Auction
 unstableMakeIsData ''Action
@@ -582,6 +584,28 @@ mkValidator theExchangerHash auction@Auction {..} action AuctionScriptContext
             && TRACE_IF_FALSE_CLOSE(
                 "Only two activity tokens minted",
                 onlyTwoActivityTokensMinted)
+
+    EmergencyClose ->
+      let
+        signedByEmergencyCloser :: Bool
+        signedByEmergencyCloser = case aEmergencyCloser of
+          Just pkh -> any (==pkh) atxInfoSignatories
+          Nothing  -> False
+
+        bidderGetsBid :: Bool
+        bidderGetsBid = case aHighBid of
+          Nothing -> True
+          Just Bid{..} ->
+            valueOf (valuePaidTo' atxInfoOutputs bidBidder) Ada.adaSymbol Ada.adaToken >= bidAmount
+
+      in TRACE_IF_FALSE("Not signed by emergency closer or no closer",signedByEmergencyCloser)
+      && TRACE_IF_FALSE(
+                "expected seller to get token",
+                (getsValue aSeller aValue))
+      && TRACE_IF_FALSE(
+                "expected bidder to get bid",
+                bidderGetsBid)
+
 
 -------------------------------------------------------------------------------
 -- Boilerplate

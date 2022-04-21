@@ -16,9 +16,9 @@ exchangedToken="$(cat $baseDir/test-policies/test-policy-0-id.txt).434e4654494f"
 minterAddress=$1
 signingKey=$2
 scriptDatumFile=$3
+output=$4
 nftPolicyId=$(cat $baseDir/global-nft-minter-hash.txt)
 mintValue="1 $nftPolicyId.494E444558"
-output="2000000 lovelace + $mintValue + 100 $exchangedToken"
 scriptAddr=$(cat $baseDir/$BLOCKCHAIN_PREFIX/exchanger.addr)
 
 bodyFile=$tempDir/sell-tx-body.01

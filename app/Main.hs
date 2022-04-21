@@ -36,6 +36,7 @@ data Options = Options
   , policyId                  :: String
   , directSaleOutput          :: String
   , directSaleHashOutput      :: String
+  , exchangerEmergencyPkh     :: String
   } deriving (Show, Generic)
 
 instance ParseRecord Options where
@@ -68,12 +69,13 @@ run Options{..} = do
   writeFile globalNftMinterHashOutput $ show globalNftPolicy
 
   let exchangerConfig = ExchangerConfig
-        { ecRateNumerator    = fromIntegral rateNumerator
-        , ecRateDenominator  = fromIntegral rateDenominator
-        , ecInitialAmount    = fromIntegral initialAmount
-        , ecTokenName        = fromString tokenName
-        , ecPolicyId         = fromString policyId
-        , ecGlobalCounterNft = globalNftPolicy
+        { ecRateNumerator     = fromIntegral rateNumerator
+        , ecRateDenominator   = fromIntegral rateDenominator
+        , ecInitialAmount     = fromIntegral initialAmount
+        , ecTokenName         = fromString tokenName
+        , ecPolicyId          = fromString policyId
+        , ecGlobalCounterNft  = globalNftPolicy
+        , ecEmergencyUnlocker = fromString exchangerEmergencyPkh
         }
 
   writeFileTextEnvelope escrowOutput Nothing escrowScript >>= \case

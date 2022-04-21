@@ -109,6 +109,11 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/start.json
     },
     {
       "bytes": "$activityPolicyId"
+    },
+    {
+      "constructor": 1,
+      "fields": [
+      ]
     }
   ]
 }
@@ -211,6 +216,11 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/bid-1.json
     },
     {
       "bytes": "$activityPolicyId"
+    },
+    {
+      "constructor": 1,
+      "fields": [
+      ]
     }
   ]
 }
@@ -313,6 +323,11 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/reserve-not-met-bid-1.js
     },
     {
       "bytes": "$activityPolicyId"
+    },
+    {
+      "constructor": 1,
+      "fields": [
+      ]
     }
   ]
 }
@@ -415,6 +430,11 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/seller-bid-1.json
     },
     {
       "bytes": "$activityPolicyId"
+    },
+    {
+      "constructor": 1,
+      "fields": [
+      ]
     }
   ]
 }
@@ -517,6 +537,11 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/bid-2.json
     },
     {
       "bytes": "$activityPolicyId"
+    },
+    {
+      "constructor": 1,
+      "fields": [
+      ]
     }
   ]
 }
