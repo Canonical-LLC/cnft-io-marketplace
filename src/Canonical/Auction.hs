@@ -152,6 +152,9 @@ data Auction = Auction
   , aActivityTokenName :: TokenName
   , aActivityPolicyId  :: CurrencySymbol
   , aEmergencyCloser   :: Maybe PubKeyHash
+  , aBoostTokenName    :: TokenName
+  , aBoostPolicyId     :: CurrencySymbol
+  , aBoostPayoutPkh    :: PubKeyHash
   }
 
 data Action = CollectBids | Close | EmergencyClose
@@ -174,6 +177,9 @@ instance Eq Auction where
     && (aActivityTokenName x == aActivityTokenName y)
     && (aActivityPolicyId  x == aActivityPolicyId  y)
     && (aEmergencyCloser   x == aEmergencyCloser   y)
+    && (aBoostTokenName    x == aBoostTokenName    y)
+    && (aBoostPolicyId     x == aBoostPolicyId     y)
+    && (aBoostPayoutPkh    x == aBoostPayoutPkh    y)
 
 unstableMakeIsData ''Auction
 unstableMakeIsData ''Action
@@ -541,6 +547,9 @@ mkValidator theExchangerHash auction@Auction {..} action AuctionScriptContext
                 (getsValue aSeller aValue))
           Just Bid{..} ->
             let
+              boostOf :: Value -> Integer
+              boostOf v = valueOf v aBoostPolicyId aBoostTokenName
+
               activityTokenOf :: Value -> Integer
               activityTokenOf v = valueOf v aActivityPolicyId aActivityTokenName
 
@@ -569,6 +578,9 @@ mkValidator theExchangerHash auction@Auction {..} action AuctionScriptContext
               onlyTwoActivityTokensMinted =
                 activityTokenOf atxInfoMint == (2 * activityTokenAmount)
 
+              boostWentToMarketplace :: Bool
+              boostWentToMarketplace = boostOf actualScriptValue <= boostOf (valuePaidTo' atxInfoOutputs aBoostPayoutPkh)
+
             in TRACE_IF_FALSE_CLOSE(
                 "expected highest bidder to get token",
                 (getsValue bidBidder aValue))
@@ -584,6 +596,9 @@ mkValidator theExchangerHash auction@Auction {..} action AuctionScriptContext
             && TRACE_IF_FALSE_CLOSE(
                 "Only two activity tokens minted",
                 onlyTwoActivityTokensMinted)
+            && TRACE_IF_FALSE_CLOSE(
+                "Boost didn't go to marketplace",
+                boostWentToMarketplace)
 
     EmergencyClose ->
       let
