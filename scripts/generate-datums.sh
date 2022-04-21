@@ -17,6 +17,8 @@ sellerPkh=$(cat $tempDir/$BLOCKCHAIN_PREFIX/pkhs/seller-pkh.txt)
 marketplacePkh=$(cat $tempDir/$BLOCKCHAIN_PREFIX/pkhs/marketplace-pkh.txt)
 royaltyPkh=$(cat $tempDir/$BLOCKCHAIN_PREFIX/pkhs/royalities-pkh.txt)
 buyerPkh=$(cat $tempDir/$BLOCKCHAIN_PREFIX/pkhs/buyer-pkh.txt)
+activityPolicyId=$(cat $thisDir/activity-minter-hash.txt)
+activityTokenName=4143544956495459
 boostTokenName=434E4654494F
 boostPolicyId=$(cat $thisDir/test-policies/test-policy-0-id.txt)
 
@@ -128,13 +130,16 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/buy.json
       "fields": []
     },
     {
+      "bytes": "$activityTokenName"
+    },
+    {
+      "bytes": "$activityPolicyId"
+    },
+    {
       "bytes": "$boostTokenName"
     },
     {
       "bytes": "$boostPolicyId"
-    },
-    {
-      "bytes": "$marketplacePkh"
     },
     {
       "bytes": "$marketplacePkh"
@@ -287,13 +292,16 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/buy-emergency-close.json
       ]
     },
     {
+      "bytes": "$activityTokenName"
+    },
+    {
+      "bytes": "$activityPolicyId"
+    },
+    {
       "bytes": "$boostTokenName"
     },
     {
       "bytes": "$boostPolicyId"
-    },
-    {
-      "bytes": "$marketplacePkh"
     },
     {
       "bytes": "$marketplacePkh"
@@ -452,13 +460,16 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/buy2.json
       "fields": []
     },
     {
+      "bytes": "$activityTokenName"
+    },
+    {
+      "bytes": "$activityPolicyId"
+    },
+    {
       "bytes": "$boostTokenName"
     },
     {
       "bytes": "$boostPolicyId"
-    },
-    {
-      "bytes": "$marketplacePkh"
     },
     {
       "bytes": "$marketplacePkh"
@@ -657,13 +668,16 @@ cat << EOF > $tempDir/$BLOCKCHAIN_PREFIX/datums/$prefix/offer.json
       ]
     },
     {
+      "bytes": "$activityTokenName"
+    },
+    {
+      "bytes": "$activityPolicyId"
+    },
+    {
       "bytes": "$boostTokenName"
     },
     {
       "bytes": "$boostPolicyId"
-    },
-    {
-      "bytes": "$marketplacePkh"
     },
     {
       "bytes": "$marketplacePkh"

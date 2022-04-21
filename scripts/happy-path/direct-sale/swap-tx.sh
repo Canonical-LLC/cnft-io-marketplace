@@ -20,5 +20,4 @@ $baseDir/core/direct-sale/swap-buy-tx.sh \
   "$tempDir/$BLOCKCHAIN_PREFIX/redeemers/$DATUM_PREFIX/buy.json" \
   $(cat $tempDir/$BLOCKCHAIN_PREFIX/datums/$DATUM_PREFIX/buy-hash.txt) \
   $(cat ~/$BLOCKCHAIN_PREFIX/buyer.addr) \
-  $(cat ~/$BLOCKCHAIN_PREFIX/marketplace.addr) \
-  ~/$BLOCKCHAIN_PREFIX/marketplace.skey
+  $tempDir/$BLOCKCHAIN_PREFIX/datums/$DATUM_PREFIX/buyerExchange.json

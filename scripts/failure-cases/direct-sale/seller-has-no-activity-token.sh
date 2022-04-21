@@ -28,7 +28,10 @@ scriptHash=$(cat scripts/$BLOCKCHAIN_PREFIX/direct-sale.addr)
 utxoScript=$(scripts/query/direct-sale.sh | grep $datumHash | head -n 1 | cardano-cli-balance-fixer parse-as-utxo)
 changeOutput=$(cardano-cli-balance-fixer change --address $spenderAddress $BLOCKCHAIN)
 
-activityToken="$(cat $baseDir/test-policies/test-policy-0-id.txt).434E4654494F"
+activityToken="$(cat $baseDir/activity-minter-hash.txt).4143544956495459"
+mintValue="2 $activityToken"
+activityMinterFile=$baseDir/activity-minter.plutus
+mintActivityTokenFile=$baseDir/redeemers/mint.json
 
 extraOutput=""
 if [ "$changeOutput" != "" ];then

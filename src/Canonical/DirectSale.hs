@@ -19,6 +19,7 @@ import           Plutus.V1.Ledger.Value
 import           Plutus.V1.Ledger.Credential
 import           Canonical.Shared
 import qualified Plutus.V1.Ledger.Scripts as Scripts
+import           Canonical.ActivityTokenExchanger
 import qualified Ledger.Ada as Ada
 #include "DebugUtilities.h"
 -------------------------------------------------------------------------------
@@ -47,14 +48,16 @@ data SwapInput = SwapInput
   , siCloseInfo         :: Maybe CloseInfo
   -- ^ Optional data for closing the listing on the behalf
   --   of the owner
+  , siActivityTokenName :: TokenName
+  -- ^ The Activity token name
+  , siActivityPolicyId  :: CurrencySymbol
+  -- ^ The Activity policy id
   , siBoostTokenName    :: TokenName
   -- ^ The Boost token name
   , siBoostPolicyId     :: CurrencySymbol
   -- ^ The Boost policy id
   , siBoostPayoutPkh    :: PubKeyHash
   -- ^ The Boost payout public key hash
-  , siBoostPayinPkh     :: PubKeyHash
-  -- ^ The pkh that signs the tx to deliver activity boost tokens
   }
 
 data BuyerInput = Cancel | Buy [Payout] | Close | EmergencyClose
@@ -114,6 +117,7 @@ instance Eq SwapInput where
     =  siOwner               x == siOwner             y
     && siSwapPayouts         x == siSwapPayouts       y
     && siCloseInfo           x == siCloseInfo         y
+    && siActivityTokenName   x == siActivityTokenName y
     && siBoostTokenName      x == siBoostTokenName    y
     && siBoostPolicyId       x == siBoostPolicyId     y
     && siBoostPayoutPkh      x == siBoostPayoutPkh    y
@@ -160,8 +164,8 @@ validateOutputConstraints info constraints
   = all (\(x, y) -> paidAtleastTo info x y)
   $ M.toList constraints
 
-buyOfferValidator :: SwapInput -> BuyerInput -> ScriptContext -> Bool
-buyOfferValidator l u ctx =
+buyOfferValidator :: ValidatorHash -> SwapInput -> BuyerInput -> ScriptContext -> Bool
+buyOfferValidator theExchangerHash l u ctx =
   let
     info@TxInfo{..} = scriptContextTxInfo ctx
 
@@ -173,15 +177,20 @@ buyOfferValidator l u ctx =
 
     Buy unlockerPayouts ->
       let
-        boostOf :: Value -> Integer
-        boostOf v = valueOf v (siBoostPolicyId l) (siBoostTokenName l)
+        activityTokenOf :: Value -> Integer
+        activityTokenOf v = valueOf v (siActivityPolicyId l) (siActivityTokenName l)
 
         buyerPkh :: PubKeyHash
         buyerPkh = case txInfoSignatories of
-          xs@[_, _] -> case filter (/=siBoostPayinPkh l) xs of
-            [x] -> x
-            _ -> TRACE_ERROR("Expected one signer after filtering out the boost payin")
-          _ -> TRACE_ERROR("Expected two signers")
+          [x] -> x
+          _ -> TRACE_ERROR("Expected on signer")
+
+        -- This needs to go to the exchanger address
+        exchangeInputs :: [(EscrowInput, Value)]
+        exchangeInputs = case getContinuingOutputs' txInfoData theExchangerHash txInfoOutputs of
+          [(ELI_EscrowInput x0, v0), (ELI_EscrowInput x1, v1)] ->
+            [(x0, v0), (x1, v1)]
+          _ -> TRACE_ERROR("Wrong exchange outputs")
 
         activityTokenAmount :: Integer
         activityTokenAmount
@@ -190,12 +199,18 @@ buyOfferValidator l u ctx =
           `divide` 20_000_000
 
         sellerGetsActivityToken :: Bool
-        sellerGetsActivityToken
-          = boostOf (valuePaidTo info (siOwner l)) >= activityTokenAmount
+        sellerGetsActivityToken = case filter ((== siOwner l) . eiOwner . fst ) exchangeInputs of
+          [(_, v)] -> activityTokenOf v == activityTokenAmount
+          _ -> TRACE_ERROR("Seller did not get a token")
 
         buyerGetsActivityToken :: Bool
-        buyerGetsActivityToken
-          = boostOf (valuePaidTo info buyerPkh) >= activityTokenAmount
+        buyerGetsActivityToken = case filter ((== buyerPkh) . eiOwner . fst ) exchangeInputs of
+          [(_, v)] -> activityTokenOf v == activityTokenAmount
+          _ -> TRACE_ERROR("Bidder did not get a token")
+
+        onlyTwoActivityTokensMinted :: Bool
+        onlyTwoActivityTokensMinted =
+          activityTokenOf txInfoMint == (2 * activityTokenAmount)
 
         isActive :: Bool
         isActive = case siCloseInfo l of
@@ -218,6 +233,9 @@ buyOfferValidator l u ctx =
                 )
           $ siSwapPayouts l <> unlockerPayouts
 
+        boostOf :: Value -> Integer
+        boostOf v = valueOf v (siBoostPolicyId l) (siBoostTokenName l)
+
         boostWentToMarketplace :: Bool
         boostWentToMarketplace = boostOf scriptInput <= boostOf (valuePaidTo info (siBoostPayoutPkh l))
 
@@ -230,6 +248,9 @@ buyOfferValidator l u ctx =
       && TRACE_IF_FALSE(
                 "Buyer did not get activity token",
                 buyerGetsActivityToken)
+      && TRACE_IF_FALSE(
+                "Only two activity tokens minted",
+                onlyTwoActivityTokensMinted)
       && TRACE_IF_FALSE("Boost did not go to the marketplace",
           boostWentToMarketplace)
 
@@ -272,27 +293,31 @@ buyOfferValidator l u ctx =
         && TRACE_IF_FALSE("Input value is incorrect", scriptInputIsValid)
       _ -> TRACE_ERROR("Not configured for emergency close")
 
+
 -------------------------------------------------------------------------------
 -- Entry Points
 -------------------------------------------------------------------------------
 wrapDirectSaleValidator
-    :: BuiltinData
+    :: ValidatorHash
+    -> BuiltinData
     -> BuiltinData
     -> BuiltinData
     -> ()
-wrapDirectSaleValidator = wrap buyOfferValidator
+wrapDirectSaleValidator = wrap . buyOfferValidator
 
-validator :: Scripts.Validator
-validator = Scripts.mkValidatorScript $
+validator :: ValidatorHash -> Scripts.Validator
+validator config = Scripts.mkValidatorScript $
   $$(PlutusTx.compile [|| wrapDirectSaleValidator ||])
+    `applyCode`
+  liftCode config
 
-directSaleHash :: ValidatorHash
-directSaleHash = validatorHash validator
+directSaleHash :: ValidatorHash -> ValidatorHash
+directSaleHash = validatorHash . validator
 
-directSale :: PlutusScript PlutusScriptV1
+directSale :: ValidatorHash -> PlutusScript PlutusScriptV1
 directSale
   = PlutusScriptSerialised
   . SBS.toShort
   . LB.toStrict
-  $ serialise
-    validator
+  . serialise
+  .validator
