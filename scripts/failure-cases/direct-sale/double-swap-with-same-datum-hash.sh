@@ -31,10 +31,7 @@ utxoScript1=$(scripts/query/direct-sale.sh | grep $datumHash1 | head -n 1 | card
 utxoScript2=$(scripts/query/direct-sale.sh | grep $datumHash2 | tail -n 1 | cardano-cli-balance-fixer parse-as-utxo)
 changeOutput=$(cardano-cli-balance-fixer change --address $spenderAddress $BLOCKCHAIN)
 
-activityToken="$(cat $baseDir/activity-minter-hash.txt).4143544956495459"
-mintValue="4 $activityToken"
-activityMinterFile=$baseDir/activity-minter.plutus
-mintActivityTokenFile=$baseDir/redeemers/mint.json
+activityToken="$(cat $baseDir/test-policies/test-policy-0-id.txt).434E4654494F"
 
 currentSlot=$(cardano-cli query tip $BLOCKCHAIN | jq .slot)
 startSlot=$currentSlot
@@ -63,15 +60,11 @@ cardano-cli transaction build \
     --tx-in-redeemer-file $redeemerFile \
     --required-signer $signingKey \
     --tx-in-collateral $(cardano-cli-balance-fixer collateral --address $spenderAddress $BLOCKCHAIN ) \
-    --tx-out "$sellerAddr + $sellerAmount" \
-    --tx-out "$buyerAddr + $value1" \
+    --tx-out "$sellerAddr + $sellerAmount + 2 $activityToken" \
+    --tx-out "$buyerAddr + $value1 + 2 $activityToken" \
     --tx-out "$marketplaceAddr + $marketPlaceAmount" \
     --tx-out "$royalitiesAddr + $value2 + $royalitiesAmount" \
     --tx-out "$spenderAddress + 3000000 lovelace $extraOutput" \
-    --tx-out "$exchanger + 2000000 lovelace + 2 $activityToken" \
-    --tx-out-datum-embed-file $sellerExchangerDatum \
-    --tx-out "$exchanger + 2000000 lovelace + 2 $activityToken" \
-    --tx-out-datum-embed-file $buyerExchangerDatum \
     --change-address $spenderAddress \
     --protocol-params-file $baseDir/$BLOCKCHAIN_PREFIX/protocol-parameters.json \
     --mint "$mintValue" \

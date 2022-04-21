@@ -5,6 +5,8 @@ baseDir=$thisDir/../..
 
 $baseDir/minting/mint-0-policy.sh buyer
 $baseDir/wait/until-next-block.sh
+$baseDir/minting/mint-cnftio-for-marketplace.sh
+$baseDir/wait/until-next-block.sh
 $baseDir/failure-cases/direct-sale/lock-no-nft.sh
 $baseDir/wait/until-next-block.sh
 
