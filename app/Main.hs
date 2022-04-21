@@ -9,6 +9,8 @@ import Ledger.Bytes                        (getLedgerBytes)
 import Canonical.Auction
 import Canonical.Escrow
 import Canonical.BidMinter
+import Canonical.ActivityMinter
+import Canonical.ActivityTokenExchanger
 import Canonical.DirectSale
 import Prelude
 import Data.String
@@ -20,6 +22,16 @@ data Options = Options
   , escrowHashOutput          :: FilePath
   , bidMinterOutput           :: FilePath
   , bidMinterHashOutput       :: FilePath
+  , exchangerOutput           :: FilePath
+  , exchangerHashOutput       :: FilePath
+  , activityMinterOutput      :: FilePath
+  , activityMinterHashOutput  :: FilePath
+  , globalNftMinterOutput     :: FilePath
+  , globalNftMinterHashOutput :: FilePath
+  , globalNftUtxo             :: String
+  , rateNumerator             :: Int
+  , rateDenominator           :: Int
+  , initialAmount             :: Int
   , tokenName                 :: String
   , policyId                  :: String
   , directSaleOutput          :: String
@@ -45,6 +57,25 @@ parseUTxO s =
 run :: Options -> IO ()
 run Options{..} = do
 
+  let theUtxo = parseUTxO globalNftUtxo
+
+  writeFileTextEnvelope globalNftMinterOutput Nothing (globalNft globalNftTokenName theUtxo) >>= \case
+    Left err -> print $ displayError err
+    Right () -> putStrLn $ "wrote validator to file " ++ globalNftMinterOutput
+
+  let globalNftPolicy = globalNftPolicyId globalNftTokenName theUtxo
+
+  writeFile globalNftMinterHashOutput $ show globalNftPolicy
+
+  let exchangerConfig = ExchangerConfig
+        { ecRateNumerator    = fromIntegral rateNumerator
+        , ecRateDenominator  = fromIntegral rateDenominator
+        , ecInitialAmount    = fromIntegral initialAmount
+        , ecTokenName        = fromString tokenName
+        , ecPolicyId         = fromString policyId
+        , ecGlobalCounterNft = globalNftPolicy
+        }
+
   writeFileTextEnvelope escrowOutput Nothing escrowScript >>= \case
     Left err -> print $ displayError err
     Right () -> putStrLn $ "wrote validator to file " ++ escrowOutput
@@ -57,18 +88,32 @@ run Options{..} = do
 
   writeFile bidMinterHashOutput $ show bidPolicyId
 
-  writeFileTextEnvelope batcherOutput Nothing auctionScript >>= \case
+  writeFileTextEnvelope exchangerOutput Nothing (exchanger exchangerConfig) >>= \case
+    Left err -> print $ displayError err
+    Right () -> putStrLn $ "wrote exchanger to file " ++ exchangerOutput
+
+  let theExchangerHash = exchangerHash exchangerConfig
+
+  writeFile exchangerHashOutput $ show theExchangerHash
+
+  writeFileTextEnvelope batcherOutput Nothing (auctionScript theExchangerHash) >>= \case
     Left err -> print $ displayError err
     Right () -> putStrLn $ "wrote validator to file " ++ batcherOutput
 
-  let theAuctionHash = auctionScriptHash
+  let theAuctionHash = auctionScriptHash theExchangerHash
 
   writeFile batcherHashOutput $ show theAuctionHash
 
-  writeFileTextEnvelope directSaleOutput Nothing directSale >>= \case
+  writeFileTextEnvelope directSaleOutput Nothing (directSale theExchangerHash) >>= \case
     Left err -> print $ displayError err
     Right () -> putStrLn $ "wrote validator to file " ++ directSaleOutput
 
-  let theDirectSaleHash = directSaleHash
+  let theDirectSaleHash = directSaleHash theExchangerHash
 
   writeFile directSaleHashOutput $ show theDirectSaleHash
+
+  writeFileTextEnvelope activityMinterOutput Nothing (activity [theAuctionHash, theDirectSaleHash]) >>= \case
+    Left err -> print $ displayError err
+    Right () -> putStrLn $ "wrote activity minter to file " ++ activityMinterOutput
+
+  writeFile activityMinterHashOutput $ show $ activityPolicyId [theAuctionHash, theDirectSaleHash]

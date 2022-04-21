@@ -18,6 +18,4 @@ $baseDir/core/close-successfully-tx.sh \
   $(cat ~/$BLOCKCHAIN_PREFIX/royalities.addr) \
   1500000 \
   $(cat ~/$BLOCKCHAIN_PREFIX/marketplace.addr) \
-  $tempDir/$BLOCKCHAIN_PREFIX/datums/$DATUM_PREFIX/buyer1Exchange.json \
-  $(cat ~/$BLOCKCHAIN_PREFIX/marketplace.addr) \
-  ~/$BLOCKCHAIN_PREFIX/marketplace.skey
+  $tempDir/$BLOCKCHAIN_PREFIX/datums/$DATUM_PREFIX/buyer1Exchange.json

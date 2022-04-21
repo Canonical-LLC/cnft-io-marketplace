@@ -24,6 +24,7 @@ import qualified PlutusTx.AssocMap as M
 import           PlutusTx.AssocMap (Map)
 import           Canonical.Shared
 import           Canonical.BidMinter
+import           Canonical.ActivityTokenExchanger
 #include "DebugUtilities.h"
 
 type BidEscrowLockerInput = EscrowLockerInput BidData
@@ -148,9 +149,8 @@ data Auction = Auction
   , aEscrowValidator   :: ValidatorHash
   , aValue             :: Value
   , aBidMinterPolicyId :: CurrencySymbol
-  , aBoostTokenName    :: TokenName
-  , aBoostPolicyId     :: CurrencySymbol
-  , aBoostPayoutPkh    :: PubKeyHash
+  , aActivityTokenName :: TokenName
+  , aActivityPolicyId  :: CurrencySymbol
   }
 
 data Action = CollectBids | Close
@@ -170,9 +170,8 @@ instance Eq Auction where
     && (aEscrowValidator   x == aEscrowValidator   y)
     && (aValue             x == aValue             y)
     && (aBidMinterPolicyId x == aBidMinterPolicyId y)
-    && (aBoostTokenName    x == aBoostTokenName    y)
-    && (aBoostPolicyId     x == aBoostPolicyId     y)
-    && (aBoostPayoutPkh    x == aBoostPayoutPkh    y)
+    && (aActivityTokenName x == aActivityTokenName y)
+    && (aActivityPolicyId  x == aActivityPolicyId  y)
 
 unstableMakeIsData ''Auction
 unstableMakeIsData ''Action
@@ -393,8 +392,8 @@ and the bid Ada is split to the addresses in the 'aPayoutPercentages'.
 The payout amounts are determined by the percentages in the
 'aPayoutPercentages' map.
 -}
-mkValidator :: Auction -> Action -> AuctionScriptContext -> Bool
-mkValidator auction@Auction {..} action AuctionScriptContext
+mkValidator :: ValidatorHash -> Auction -> Action -> AuctionScriptContext -> Bool
+mkValidator theExchangerHash auction@Auction {..} action AuctionScriptContext
   { aScriptContextTxInfo = AuctionTxInfo {..}
   , aScriptContextPurpose = ASpending thisOutRef
   } =
@@ -540,33 +539,37 @@ mkValidator auction@Auction {..} action AuctionScriptContext
                 (getsValue aSeller aValue))
           Just Bid{..} ->
             let
-              boostOf :: Value -> Integer
-              boostOf v = valueOf v aBoostPolicyId aBoostTokenName
+              activityTokenOf :: Value -> Integer
+              activityTokenOf v = valueOf v aActivityPolicyId aActivityTokenName
 
               activityTokenAmount :: Integer
               activityTokenAmount
                 = max 1 $ bidAmount `divide` 20_000_000
 
-              sellerPaidValue :: Value
-              sellerPaidValue = valuePaidTo' atxInfoOutputs aSeller
+              -- This needs to go to the exchanger address
+              exchangeInputs :: [(EscrowInput, Value)]
+              exchangeInputs = case getContinuingOutputs' atxInfoData theExchangerHash atxInfoOutputs of
+                [(ELI_EscrowInput x0, v0), (ELI_EscrowInput x1, v1)] ->
+                  [(x0, atxOutValue v0), (x1, atxOutValue v1)]
+                _ -> TRACE_ERROR("Wrong exchange outputs")
 
               sellerGetsActivityToken :: Bool
-              sellerGetsActivityToken
-                = boostOf sellerPaidValue >= activityTokenAmount
-
-              bidderValue :: Value
-              bidderValue = valuePaidTo' atxInfoOutputs bidBidder
+              sellerGetsActivityToken = case filter ((== aSeller) . eiOwner . fst ) exchangeInputs of
+                [(_, v)] -> activityTokenOf v == activityTokenAmount
+                _ -> TRACE_ERROR("Seller did not get a token")
 
               buyerGetsActivityToken :: Bool
-              buyerGetsActivityToken
-                = boostOf bidderValue >= activityTokenAmount
+              buyerGetsActivityToken = case filter ((== bidBidder) . eiOwner . fst ) exchangeInputs of
+                [(_, v)] -> activityTokenOf v == activityTokenAmount
+                _ -> TRACE_ERROR("Bidder did not get a token")
 
-              boostWentToMarketplace :: Bool
-              boostWentToMarketplace = boostOf actualScriptValue <= boostOf (valuePaidTo' atxInfoOutputs aBoostPayoutPkh)
+              onlyTwoActivityTokensMinted :: Bool
+              onlyTwoActivityTokensMinted =
+                activityTokenOf atxInfoMint == (2 * activityTokenAmount)
 
             in TRACE_IF_FALSE_CLOSE(
                 "expected highest bidder to get token",
-                (bidderValue `geq` aValue))
+                (getsValue bidBidder aValue))
             && TRACE_IF_FALSE_CLOSE(
                 "expected all sellers to get highest bid",
                 (payoutIsValid bidAmount atxInfoOutputs aPayoutPercentages))
@@ -577,28 +580,30 @@ mkValidator auction@Auction {..} action AuctionScriptContext
                 "Buyer did not get activity token",
                 buyerGetsActivityToken)
             && TRACE_IF_FALSE_CLOSE(
-                "Boost went to marketplace",
-                boostWentToMarketplace)
+                "Only two activity tokens minted",
+                onlyTwoActivityTokensMinted)
 
 -------------------------------------------------------------------------------
 -- Boilerplate
 -------------------------------------------------------------------------------
-auctionWrapped :: BuiltinData -> BuiltinData -> BuiltinData -> ()
-auctionWrapped = wrap mkValidator
+auctionWrapped :: ValidatorHash -> BuiltinData -> BuiltinData -> BuiltinData -> ()
+auctionWrapped = wrap . mkValidator
 
-validator :: Scripts.Validator
-validator = mkValidatorScript $
+validator :: ValidatorHash -> Scripts.Validator
+validator config = mkValidatorScript $
   $$(PlutusTx.compile [|| \c -> auctionWrapped c ||])
+  `applyCode`
+  liftCode config
 
-auctionScriptHash :: ValidatorHash
-auctionScriptHash = validatorHash validator
+auctionScriptHash :: ValidatorHash -> ValidatorHash
+auctionScriptHash = validatorHash . validator
 -------------------------------------------------------------------------------
 -- Entry point
 -------------------------------------------------------------------------------
-auctionScript :: PlutusScript PlutusScriptV1
+auctionScript :: ValidatorHash -> PlutusScript PlutusScriptV1
 auctionScript
   = PlutusScriptSerialised
   . SBS.toShort
   . LB.toStrict
-  $ serialise
-    validator
+  . serialise
+  . validator

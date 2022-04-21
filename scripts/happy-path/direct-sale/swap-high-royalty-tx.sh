@@ -19,6 +19,4 @@ $baseDir/core/direct-sale/swap-buy-tx.sh \
   "2000000 lovelace" \
   "$tempDir/$BLOCKCHAIN_PREFIX/redeemers/$DATUM_PREFIX/buy.json" \
   $(cat $tempDir/$BLOCKCHAIN_PREFIX/datums/$DATUM_PREFIX/buy-high-royalty-hash.txt) \
-  $(cat ~/$BLOCKCHAIN_PREFIX/buyer.addr) \
-  $(cat ~/$BLOCKCHAIN_PREFIX/marketplace.addr) \
-  ~/$BLOCKCHAIN_PREFIX/marketplace.skey
+  $(cat ~/$BLOCKCHAIN_PREFIX/buyer.addr)
