@@ -27,7 +27,7 @@ cabal run exe:create-sc -- \
   --policy-id=6cfbfedd8c8ea23d264f5ae3ef039217100c210bb66de8711f21c903 \
   --direct-sale-output=scripts/direct-sale.plutus \
   --direct-sale-hash-output=scripts/direct-sale-hash.txt \
-  --exchanger-emergency-pkh=01b05e7d27917ead7f23f99ae177091ef86b739538793e3677f1273c
+  --exchanger-emergency-pkh=d7eeb5342b35372519c7938133563518d8f3d7ce86e56ec278fbf84d
 )
 
 
