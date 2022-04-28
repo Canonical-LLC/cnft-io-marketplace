@@ -119,8 +119,6 @@ data ExchangerScriptContext = ExchangerScriptContext
   , aScriptContextPurpose :: ExchangerScriptPurpose
   }
 
-
-
 data ExchangerConfig = ExchangerConfig
   { ecRateNumerator     :: Integer
   , ecRateDenominator   :: Integer

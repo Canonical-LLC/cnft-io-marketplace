@@ -2,7 +2,7 @@ set -eu
 thisDir=$(dirname "$0")
 mainDir=$thisDir/..
 
-utxo=${1:-$(./scripts/query/seller.sh | tail -1 | head | cardano-cli-balance-fixer parse-as-utxo)}
+utxo=${1:-$(./scripts/query/buyer.sh | tail -1 | head | cardano-cli-balance-fixer parse-as-utxo)}
 
 (
 cd $mainDir
@@ -27,7 +27,7 @@ cabal run exe:create-sc -- \
   --policy-id=6cfbfedd8c8ea23d264f5ae3ef039217100c210bb66de8711f21c903 \
   --direct-sale-output=scripts/direct-sale.plutus \
   --direct-sale-hash-output=scripts/direct-sale-hash.txt \
-  --exchanger-emergency-pkh=d7eeb5342b35372519c7938133563518d8f3d7ce86e56ec278fbf84d
+  --exchanger-emergency-pkh=01e716578abae032d84503c03c6779b3458e1a467fbe324a8f878ad2
 )
 
 

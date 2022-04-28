@@ -85,8 +85,11 @@ getOnlyScriptInput info =
 payoutToInequality :: Payout -> (PubKeyHash, Value)
 payoutToInequality Payout {..} = (pAddress, pValue)
 
+absoluteValueAdd :: Value -> Value -> Value
+absoluteValueAdd x y = unionWith (\x' y' -> abs x' + abs y') x y
+
 mergePayoutsValue :: [Payout] -> Value
-mergePayoutsValue = foldr (\x acc -> pValue x <> acc) mempty
+mergePayoutsValue = foldr (\x acc -> absoluteValueAdd (pValue x) acc) mempty
 
 paidAtleastTo :: TxInfo -> PubKeyHash -> Value -> Bool
 paidAtleastTo info pkh val = valuePaidTo info pkh `geq` val
